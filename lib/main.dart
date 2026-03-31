@@ -21,7 +21,7 @@ class SaatDinApp extends StatelessWidget {
       title: 'SaatDin',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.welcome,
+      initialRoute: AppRoutes.onboarding,
       routes: AppRoutes.routes,
     );
   }
