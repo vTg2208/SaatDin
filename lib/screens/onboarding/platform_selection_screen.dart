@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../models/platform_model.dart';
+import '../../services/api_service.dart';
 import '../../widgets/platform_card.dart';
 import '../../widgets/progress_dots.dart';
 import '../../routes/app_routes.dart';
@@ -14,13 +15,20 @@ class PlatformSelectionScreen extends StatefulWidget {
 }
 
 class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
+  final ApiService _apiService = ApiService();
   int? _selectedIndex;
-  final _platforms = DeliveryPlatform.getPlatforms();
+  List<DeliveryPlatform> _platforms = DeliveryPlatform.getPlatforms();
 
-  bool get _canContinue => _selectedIndex != null;
+  bool get _canContinue =>
+      _selectedIndex != null && _selectedIndex! >= 0 && _selectedIndex! < _platforms.length;
 
   @override
   Widget build(BuildContext context) {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final phone = (args?['phone'] as String?)?.trim() ?? '';
+    final name = (args?['name'] as String?)?.trim() ?? '';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -56,7 +64,7 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
               const SizedBox(height: 24),
 
               // Progress dots
-              const ProgressDots(total: 3, current: 0),
+              const ProgressDots(total: 4, current: 0),
               const SizedBox(height: 28),
 
               // Title
@@ -82,23 +90,57 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
 
               // Platform cards
               Expanded(
-                child: ListView(
-                  children: [
-                    ..._platforms.asMap().entries.map((entry) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: PlatformCard(
-                          platform: entry.value,
-                          isSelected: _selectedIndex == entry.key,
-                          onTap: () {
-                            setState(() {
-                              _selectedIndex = entry.key;
-                            });
-                          },
+                child: FutureBuilder<List<DeliveryPlatform>>(
+                  future: _apiService.getPlatforms(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Failed to load platforms. Please verify OTP and retry.',
+                          style: TextStyle(color: AppColors.error),
+                          textAlign: TextAlign.center,
                         ),
                       );
-                    }),
-                  ],
+                    }
+
+                    final platforms = snapshot.data ?? const <DeliveryPlatform>[];
+                    _platforms = platforms;
+                    if (_selectedIndex != null && _selectedIndex! >= platforms.length) {
+                      _selectedIndex = null;
+                    }
+
+                    if (platforms.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No platforms available from backend.',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      );
+                    }
+
+                    return ListView(
+                      children: [
+                        ...platforms.asMap().entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: PlatformCard(
+                              platform: entry.value,
+                              isSelected: _selectedIndex == entry.key,
+                              onTap: () {
+                                setState(() {
+                                  _selectedIndex = entry.key;
+                                });
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 16),
@@ -111,10 +153,12 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
                       ? () {
                           Navigator.pushNamed(
                             context,
-                            AppRoutes.planSelect,
+                            AppRoutes.zoneSelect,
                             arguments: {
                               'platform':
                                   _platforms[_selectedIndex!].name,
+                              'phone': phone,
+                              'name': name,
                             },
                           );
                         }

@@ -4,111 +4,138 @@ import 'package:flutter/material.dart';
 
 import '../../models/user_model.dart';
 import '../../routes/app_routes.dart';
+import '../../services/api_service.dart';
 import '../../services/tab_router.dart';
 import '../../theme/app_colors.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  static final ApiService _apiService = ApiService();
+
   @override
   Widget build(BuildContext context) {
-    final user = User.getMockUser();
-    final email =
-        '${user.name.toLowerCase().replaceAll(' ', '')}@saatdin.app';
+    return FutureBuilder<User>(
+      future: _apiService.getProfile('me'),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppColors.scaffoldBackground,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBackground,
-      body: Stack(
-        children: [
-          _buildGlassTopBackground(),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildTopBar(context),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Account',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _buildAccountCard(user, email),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Team',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOptionTile(
-                    icon: Icons.settings_outlined,
-                    title: 'Settings',
-                    onTap: () => _showSimpleInfo(context, 'Settings panel opened.'),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.dark_mode_outlined,
-                    title: 'Theme',
-                    onTap: () => _showSimpleInfo(context, 'Theme controls opened.'),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.info_outline,
-                    title: 'Help and resources',
-                    onTap: () => _showSimpleInfo(context, 'Help center opened.'),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.grid_view_rounded,
-                    title: 'Advanced tools',
-                    badge: 'Beta',
-                    onTap: () => _showSimpleInfo(context, 'Advanced tools coming soon.'),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.work_outline,
-                    title: 'Plans and pricing',
-                    onTap: () => _switchToTab(context, 2),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.history,
-                    title: 'Claims history',
-                    onTap: () => _switchToTab(context, 1),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.payments_outlined,
-                    title: 'Payouts',
-                    onTap: () => _switchToTab(context, 3),
-                  ),
-                  _buildOptionTile(
-                    icon: Icons.logout,
-                    title: 'Log out',
-                    onTap: () => _confirmLogout(context),
-                  ),
-                ],
+        if (snapshot.hasError || snapshot.data == null) {
+          return const Scaffold(
+            backgroundColor: AppColors.scaffoldBackground,
+            body: Center(
+              child: Text(
+                'Failed to load profile. Please retry.',
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
+          );
+        }
+
+        final user = snapshot.data!;
+        final email =
+            '${user.name.toLowerCase().replaceAll(' ', '')}@saatdin.app';
+
+        return Scaffold(
+          backgroundColor: AppColors.scaffoldBackground,
+          body: Stack(
+            children: [
+              _buildGlassTopBackground(),
+              SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTopBar(context, user),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Account',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildAccountCard(user, email),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Team',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildOptionTile(
+                        icon: Icons.settings_outlined,
+                        title: 'Settings',
+                        onTap: () => _showSimpleInfo(context, 'Settings panel opened.'),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.dark_mode_outlined,
+                        title: 'Theme',
+                        onTap: () => _showSimpleInfo(context, 'Theme controls opened.'),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.info_outline,
+                        title: 'Help and resources',
+                        onTap: () => _showSimpleInfo(context, 'Help center opened.'),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.grid_view_rounded,
+                        title: 'Advanced tools',
+                        badge: 'Beta',
+                        onTap: () => _showSimpleInfo(context, 'Advanced tools coming soon.'),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.work_outline,
+                        title: 'Plans and pricing',
+                        onTap: () => _switchToTab(context, 2),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.history,
+                        title: 'Claims history',
+                        onTap: () => _switchToTab(context, 1),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.payments_outlined,
+                        title: 'Payouts',
+                        onTap: () => _switchToTab(context, 3),
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.logout,
+                        title: 'Log out',
+                        onTap: () => _confirmLogout(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
+  Widget _buildTopBar(BuildContext context, User user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _headerIconButton(
           icon: Icons.arrow_back,
-          tooltip: 'Back',
+          tooltip: 'Back to Home',
           onTap: () {
-            Navigator.of(context).maybePop();
+            _switchToTab(context, 0);
           },
         ),
         Row(

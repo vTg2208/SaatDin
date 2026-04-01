@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/claim_model.dart';
 import '../../models/plan_model.dart';
 import '../../models/user_model.dart';
+import '../../services/api_service.dart';
 import '../../services/tab_router.dart';
 import '../../theme/app_colors.dart';
 
@@ -14,17 +16,18 @@ class CoverageScreen extends StatefulWidget {
 }
 
 class _CoverageScreenState extends State<CoverageScreen> {
-  final _plans = InsurancePlan.getPlans();
+  final ApiService _apiService = ApiService();
+  List<InsurancePlan> _plans = const <InsurancePlan>[];
+  List<Claim> _claims = const <Claim>[];
+  User? _user;
+  String? _pendingPlanName;
+  String? _pendingEffectiveDate;
+  bool _isLoading = true;
   int _currentTierIndex = 1;
   int _selectedTierIndex = 1;
   int _simulatorIndex = 1;
 
   final NumberFormat _currencyFormat = NumberFormat('#,##0');
-
-  static const double _baseRate = 45;
-  static const double _zoneMultiplier = 1.3;
-  static const double _platformMultiplier = 1.1;
-  static const double _loyaltyDiscount = 0.05;
 
   late final List<_TriggerInfo> _triggers = [
     const _TriggerInfo(
@@ -65,8 +68,75 @@ class _CoverageScreenState extends State<CoverageScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadCoverageData();
+  }
+
+  Future<void> _loadCoverageData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await _apiService.getProfile('me');
+      final policy = await _apiService.getPolicy('me');
+      final plans = await _apiService.getPlans(zone: user.zone, platform: user.platform);
+      final claims = await _apiService.getClaims('me');
+
+      var currentIndex = plans.indexWhere(
+        (p) => p.name.toLowerCase() == ((policy['plan'] as String? ?? user.plan).toLowerCase()),
+      );
+      if (currentIndex < 0) currentIndex = 0;
+
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _plans = plans;
+        _claims = claims;
+        _pendingPlanName = policy['pendingPlan'] as String?;
+        _pendingEffectiveDate = policy['pendingEffectiveDate'] as String?;
+        _currentTierIndex = currentIndex;
+        _selectedTierIndex = currentIndex;
+        _simulatorIndex = currentIndex;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load coverage from backend.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = User.getMockUser();
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final user = _user;
+    if (user == null || _plans.isEmpty) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(
+          child: Text(
+            'Coverage data unavailable. Please retry.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
     final selectedPlan = _plans[_selectedTierIndex];
     final estimatedPremium = _calculateEstimatedPremium();
 
@@ -113,6 +183,11 @@ class _CoverageScreenState extends State<CoverageScreen> {
                   const SizedBox(height: 18),
               const _CoverageSectionHeader('Tier Selector'),
               const SizedBox(height: 10),
+              if (_pendingPlanName != null && _pendingPlanName!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildPendingPlanNotice(),
+                ),
               ..._plans.asMap().entries.map(
                 (entry) {
                   final index = entry.key;
@@ -224,17 +299,33 @@ class _CoverageScreenState extends State<CoverageScreen> {
                 child: ElevatedButton(
                   onPressed: _selectedTierIndex == _currentTierIndex
                       ? null
-                      : () {
-                          setState(() {
-                            _currentTierIndex = _selectedTierIndex;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${selectedPlan.name} plan selected for next billing cycle.',
+                      : () async {
+                          try {
+                            final policy = await _apiService.updatePolicyPlan(selectedPlan.name);
+                            if (!context.mounted) return;
+                            final pendingPlan = policy['pendingPlan'] as String?;
+                            final pendingEffectiveDate = policy['pendingEffectiveDate'] as String?;
+                            setState(() {
+                              _pendingPlanName = pendingPlan;
+                              _pendingEffectiveDate = pendingEffectiveDate;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  pendingEffectiveDate == null
+                                      ? '${selectedPlan.name} plan will apply next week.'
+                                      : '${selectedPlan.name} plan will apply from $pendingEffectiveDate.',
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Policy update failed. Please verify login and retry.'),
+                              ),
+                            );
+                          }
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -267,7 +358,10 @@ class _CoverageScreenState extends State<CoverageScreen> {
                     const SizedBox(height: 8),
                     _breakdownRow('Platform (Blinkit 1.1x)', 'x 1.10'),
                     const SizedBox(height: 8),
-                    _breakdownRow('Loyalty discount (5%)', '- 5%'),
+                    _breakdownRow(
+                      'Loyalty discount (${_loyaltyDiscountPercent.toStringAsFixed(0)}%)',
+                      '- ${_loyaltyDiscountPercent.toStringAsFixed(0)}%',
+                    ),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 10),
                       child: Divider(height: 1, color: AppColors.border),
@@ -381,9 +475,9 @@ class _CoverageScreenState extends State<CoverageScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '4-week clean streak - 5% discount applied',
-                      style: TextStyle(
+                    Text(
+                      _loyaltyHeadline,
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
@@ -394,16 +488,16 @@ class _CoverageScreenState extends State<CoverageScreen> {
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
                         minHeight: 8,
-                        value: 0.5,
+                        value: _loyaltyProgress,
                         backgroundColor: AppColors.borderLight,
                         valueColor:
                             const AlwaysStoppedAnimation<Color>(AppColors.primary),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      '2 more clean weeks to unlock 10% discount.',
-                      style: TextStyle(
+                    Text(
+                      _loyaltySubtext,
+                      style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
@@ -429,8 +523,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
                     Slider(
                       value: _simulatorIndex.toDouble(),
                       min: 0,
-                      max: 2,
-                      divisions: 2,
+                      max: (_plans.length - 1).toDouble(),
+                      divisions: _plans.length > 1 ? _plans.length - 1 : null,
                       label: _plans[_simulatorIndex].name,
                       activeColor: AppColors.primary,
                       onChanged: (value) {
@@ -478,32 +572,12 @@ class _CoverageScreenState extends State<CoverageScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Tooltip(
-          message: 'Account',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              _openProfile();
-            },
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  user.name.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
+        _utilityIconButton(
+          icon: Icons.arrow_back,
+          tooltip: 'Back to Home',
+          onTap: () {
+            _switchToTab(0);
+          },
         ),
         Row(
           children: [
@@ -516,10 +590,10 @@ class _CoverageScreenState extends State<CoverageScreen> {
             ),
             const SizedBox(width: 10),
             _utilityIconButton(
-              icon: Icons.menu,
-              tooltip: 'Menu',
+              icon: Icons.account_circle_outlined,
+              tooltip: 'Account',
               onTap: () {
-                _showMenuSheet();
+                _showAccountSheet(user);
               },
             ),
           ],
@@ -553,8 +627,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
   }
 
   double _calculateEstimatedPremium() {
-    final premium = _baseRate * _zoneMultiplier * _platformMultiplier;
-    return premium * (1 - _loyaltyDiscount);
+    if (_plans.isEmpty) return 0;
+    return _plans[_selectedTierIndex].weeklyPremium.toDouble();
   }
 
   int _simulatedPayout(int tierIndex) {
@@ -568,6 +642,90 @@ class _CoverageScreenState extends State<CoverageScreen> {
       default:
         return 0;
     }
+  }
+
+  Widget _buildPendingPlanNotice() {
+    final effectiveText = _pendingEffectiveDate == null
+        ? 'next week'
+        : DateFormat('d MMM').format(DateTime.tryParse(_pendingEffectiveDate!) ?? DateTime.now());
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        'Pending change: $_pendingPlanName will become active on $effectiveText. Your current week coverage stays unchanged.',
+        style: const TextStyle(
+          fontSize: 12,
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w600,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+
+  int get _cleanStreakWeeks {
+    if (_claims.isEmpty) {
+      return 6;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final claimDates = _claims
+        .map((c) => DateTime(c.date.year, c.date.month, c.date.day))
+        .toList();
+
+    var streak = 0;
+    for (var weekOffset = 0; weekOffset < 12; weekOffset++) {
+      final weekStart = today.subtract(Duration(days: today.weekday - 1 + (weekOffset * 7)));
+      final weekEnd = weekStart.add(const Duration(days: 7));
+      final hasClaimThisWeek = claimDates.any(
+        (date) => !date.isBefore(weekStart) && date.isBefore(weekEnd),
+      );
+      if (hasClaimThisWeek) {
+        break;
+      }
+      streak++;
+    }
+    return streak;
+  }
+
+  double get _loyaltyDiscountPercent {
+    if (_cleanStreakWeeks >= 6) return 10;
+    if (_cleanStreakWeeks >= 4) return 5;
+    return 0;
+  }
+
+  double get _loyaltyProgress {
+    if (_loyaltyDiscountPercent >= 10) {
+      return 1.0;
+    }
+    final targetWeeks = _loyaltyDiscountPercent >= 5 ? 6 : 4;
+    return (_cleanStreakWeeks / targetWeeks).clamp(0, 1).toDouble();
+  }
+
+  String get _loyaltyHeadline {
+    if (_loyaltyDiscountPercent >= 10) {
+      return '$_cleanStreakWeeks-week clean streak - 10% discount applied';
+    }
+    if (_loyaltyDiscountPercent >= 5) {
+      return '$_cleanStreakWeeks-week clean streak - 5% discount applied';
+    }
+    return '$_cleanStreakWeeks-week clean streak - no loyalty discount yet';
+  }
+
+  String get _loyaltySubtext {
+    if (_loyaltyDiscountPercent >= 10) {
+      return 'Maximum loyalty tier unlocked from backend claim history.';
+    }
+    final nextTarget = _loyaltyDiscountPercent >= 5 ? 6 : 4;
+    final nextDiscount = _loyaltyDiscountPercent >= 5 ? 10 : 5;
+    final remaining = (nextTarget - _cleanStreakWeeks).clamp(0, nextTarget);
+    return '$remaining more clean weeks to unlock $nextDiscount% discount.';
   }
 
   void _openProfile() {
@@ -604,7 +762,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
     );
   }
 
-  void _showMenuSheet() {
+  void _showAccountSheet(User user) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -614,6 +772,29 @@ class _CoverageScreenState extends State<CoverageScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    user.name.isEmpty ? 'U' : user.name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                title: Text(user.name),
+                subtitle: Text(user.phone),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openProfile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Home'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(0);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Claims'),
                 onTap: () {
@@ -622,11 +803,11 @@ class _CoverageScreenState extends State<CoverageScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Profile'),
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Coverage details'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _openProfile();
+                  _switchToTab(2);
                 },
               ),
               ListTile(

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
-import '../routes/app_routes.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../routes/app_routes.dart';
+import '../services/api_service.dart';
+import '../theme/app_colors.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -15,16 +17,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _phoneFocusNode = FocusNode();
-
-  bool get _isValid => _phoneController.text.length == 10;
+  final ApiService _apiService = ApiService();
 
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnimation;
 
+  bool _isSendingOtp = false;
+
+  bool get _isValid => _phoneController.text.length == 10;
+
   @override
   void initState() {
     super.initState();
-    _phoneController.addListener(() => setState(() {}));
+    _phoneController.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     _fadeController = AnimationController(
       vsync: this,
@@ -45,6 +52,42 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
+  Future<void> _handleContinue() async {
+    if (!_isValid || _isSendingOtp) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isSendingOtp = true;
+    });
+
+    final phone = _phoneController.text.trim();
+    final sent = await _apiService.sendOtp(phone);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSendingOtp = false;
+    });
+
+    if (!sent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _apiService.lastError ?? 'Could not send OTP. Please try again.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.otpVerify,
+      arguments: {'phone': phone},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,34 +95,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         opacity: _fadeAnimation,
         child: Stack(
           children: [
-            /// ── Background Image ─────────────────────
             Positioned.fill(
               child: Image.asset(
                 'assets/images/gig.png',
                 fit: BoxFit.cover,
               ),
             ),
-
-            /// ── Overlay (90% opacity) ────────────────
             Positioned.fill(
               child: Container(
                 color: const Color(0xFFF5F5F5).withValues(alpha: 0.9),
               ),
             ),
-
-            /// ── Center Content ───────────────────────
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Column(
                   children: [
-                    /// Main Content
                     Expanded(
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            /// Logo
                             Container(
                               width: 100,
                               height: 100,
@@ -95,10 +131,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
-                            /// Tagline
                             RichText(
                               textAlign: TextAlign.center,
                               text: TextSpan(
@@ -117,17 +150,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: GoogleFonts.dancingScript(
                                       fontSize: 50,
                                       fontWeight: FontWeight.w900,
-                                      color: Color(0xFF556B2F),
+                                      color: const Color(0xFF556B2F),
                                       height: 0.8,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 32),
-
-                            /// Phone Input
                             Container(
                               height: 54,
                               decoration: BoxDecoration(
@@ -138,7 +168,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               child: Row(
                                 children: [
                                   const SizedBox(width: 10),
-
                                   const Text(
                                     '+91',
                                     style: TextStyle(
@@ -147,17 +176,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       color: AppColors.textPrimary,
                                     ),
                                   ),
-
                                   const SizedBox(width: 4),
-
                                   Container(
                                     width: 1,
                                     height: 18,
                                     color: const Color(0xFFE5E7EB),
                                   ),
-
                                   const SizedBox(width: 4),
-
                                   Expanded(
                                     child: TextField(
                                       controller: _phoneController,
@@ -188,37 +213,37 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       ),
                                     ),
                                   ),
-
                                   const SizedBox(width: 10),
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 20),
-
-                            /// Continue Button
+                            const Text(
+                              'After OTP, we will automatically log you in or start registration.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Container(
                               height: 54,
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: _isValid
-                                    ? AppColors.primary
-                                    : const Color(0xFFD1D5DB),
+                                color:
+                                    _isValid ? AppColors.primary : const Color(0xFFD1D5DB),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(14),
-                                  onTap: _isValid
-                                      ? () => Navigator.pushNamed(
-                                            context,
-                                            AppRoutes.platformSelect,
-                                          )
-                                      : null,
+                                  onTap: _isValid ? _handleContinue : null,
                                   child: Center(
                                     child: Text(
-                                      'Continue',
+                                      _isSendingOtp ? 'Sending OTP...' : 'Continue',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -235,8 +260,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         ),
                       ),
                     ),
-
-                    /// 🔻 Terms & Conditions (Bottom)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: RichText(
@@ -246,21 +269,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             fontSize: 11.5,
                             color: Colors.black.withValues(alpha: 0.8),
                           ),
-                          children: [
-                            const TextSpan(
-                                text: 'By continuing, you agree to our '),
+                          children: const [
+                            TextSpan(text: 'By continuing, you agree to our '),
                             TextSpan(
                               text: 'Terms of Service',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
-                            const TextSpan(text: ' & '),
+                            TextSpan(text: ' & '),
                             TextSpan(
                               text: 'Privacy Policy',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -269,7 +287,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ],
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),

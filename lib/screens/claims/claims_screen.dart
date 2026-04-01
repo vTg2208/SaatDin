@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 import '../../theme/app_colors.dart';
 import '../../models/claim_model.dart';
 import '../../models/user_model.dart';
+import '../../services/api_service.dart';
 import '../../widgets/claim_card.dart';
 import '../../services/tab_router.dart';
 
@@ -14,40 +16,60 @@ class ClaimsScreen extends StatefulWidget {
 }
 
 class _ClaimsScreenState extends State<ClaimsScreen> {
+  final ApiService _apiService = ApiService();
   int _selectedTab = 0;
   final _tabs = ['All Claims', 'In Review', 'Settled'];
-  final _claims = Claim.getMockClaims();
+  List<Claim> _claims = [];
+  User? _user;
+  Map<String, dynamic>? _policy;
+  bool _isLoadingClaims = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClaims();
+  }
+
+  Future<void> _loadClaims() async {
+    setState(() {
+      _isLoadingClaims = true;
+    });
+
+    try {
+      final user = await _apiService.getProfile('me');
+      final policy = await _apiService.getPolicy('me');
+      final claims = await _apiService.getClaims('me');
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _policy = policy;
+        _claims = claims;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load claims from backend.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClaims = false;
+        });
+      }
+    }
+  }
 
   Widget _buildTopUtilityButtons(User user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Tooltip(
-          message: 'Account',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              _openProfile();
-            },
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  user.name.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
+        _utilityIconButton(
+          icon: Icons.arrow_back,
+          tooltip: 'Back to Home',
+          onTap: () {
+            _switchToTab(0);
+          },
         ),
         Row(
           children: [
@@ -60,10 +82,10 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
             ),
             const SizedBox(width: 10),
             _utilityIconButton(
-              icon: Icons.menu,
-              tooltip: 'Menu',
+              icon: Icons.account_circle_outlined,
+              tooltip: 'Account',
               onTap: () {
-                _showMenuSheet();
+                _showAccountSheet(user);
               },
             ),
           ],
@@ -113,7 +135,29 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = User.getMockUser();
+    final user = _user;
+    final weeklyPremium = (_policy?['weeklyPremium'] as num? ?? 0).toInt();
+    final policyStatus = ((_policy?['status'] as String?) ?? 'active').toUpperCase();
+    final inReviewCount = _claims.where((c) => c.status == ClaimStatus.inReview).length;
+
+    if (_isLoadingClaims) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(
+          child: Text(
+            'Failed to load claims data.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -197,8 +241,8 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          '₹4,250',
+                        Text(
+                          '₹$weeklyPremium',
                           style: TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.w800,
@@ -213,8 +257,8 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                             color: AppColors.success,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'ACTIVE',
+                          child: Text(
+                            policyStatus,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -227,7 +271,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Pending Settlements',
+                      '$inReviewCount pending settlements',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.white.withValues(alpha: 0.6),
@@ -297,7 +341,12 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
               const SizedBox(height: 10),
 
               // Claims list
-              if (_filteredClaims.isEmpty)
+              if (_isLoadingClaims)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_filteredClaims.isEmpty)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 40),
@@ -407,7 +456,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     );
   }
 
-  void _showMenuSheet() {
+  void _showAccountSheet(User user) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -417,19 +466,42 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    user.name.isEmpty ? 'U' : user.name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                title: Text(user.name),
+                subtitle: Text(user.phone),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openProfile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Home'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('Claims'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(1);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.shield_outlined),
                 title: const Text('Coverage details'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _switchToTab(2);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Profile'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _openProfile();
                 },
               ),
               ListTile(
@@ -447,90 +519,139 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     );
   }
 
-  void _showNewClaimSheet() {
+  Future<void> _showNewClaimSheet() async {
     String selectedType = 'TrafficBlock';
     final descriptionController = TextEditingController();
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Report a new claim',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  math.max(0.0, MediaQuery.of(sheetContext).viewInsets.bottom) +
+                      16,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedType,
-                    decoration: const InputDecoration(
-                      labelText: 'Trigger type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'TrafficBlock', child: Text('TrafficBlock')),
-                      DropdownMenuItem(value: 'RainLock', child: Text('RainLock')),
-                      DropdownMenuItem(value: 'AQI Guard', child: Text('AQI Guard')),
-                      DropdownMenuItem(value: 'ZoneLock', child: Text('ZoneLock')),
-                      DropdownMenuItem(value: 'HeatBlock', child: Text('HeatBlock')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setSheetState(() {
-                          selectedType = value;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'What happened?',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        final desc = descriptionController.text.trim().isEmpty
-                            ? 'No additional details provided'
-                            : descriptionController.text.trim();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Claim submitted: $selectedType · $desc',
-                            ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Report a new claim',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Trigger type',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
                           ),
-                        );
-                      },
-                      child: const Text('Submit claim'),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            'TrafficBlock',
+                            'RainLock',
+                            'AQI Guard',
+                            'ZoneLock',
+                            'HeatBlock',
+                          ].map((type) {
+                            final isSelected = selectedType == type;
+                            return ChoiceChip(
+                              label: Text(type),
+                              selected: isSelected,
+                              onSelected: (_) {
+                                setSheetState(() {
+                                  selectedType = type;
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: descriptionController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'What happened?',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final navigator = Navigator.of(sheetContext);
+                              final desc = descriptionController.text.trim().isEmpty
+                                  ? 'No additional details provided'
+                                  : descriptionController.text.trim();
+                              ClaimType claimType = ClaimType.trafficBlock;
+                              if (selectedType == 'RainLock') claimType = ClaimType.rainLock;
+                              if (selectedType == 'AQI Guard') claimType = ClaimType.aqiGuard;
+                              if (selectedType == 'ZoneLock') claimType = ClaimType.zoneLock;
+                              if (selectedType == 'HeatBlock') claimType = ClaimType.heatBlock;
+
+                              try {
+                                await _apiService.submitClaim(
+                                  userId: 'me',
+                                  type: claimType,
+                                  description: desc,
+                                );
+                                if (!context.mounted) return;
+                                navigator.pop();
+                                await _loadClaims();
+                              } catch (_) {
+                                if (!context.mounted) return;
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Claim submission failed. Please try again.'),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              if (!context.mounted) return;
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Claim submitted: $selectedType · $desc',
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('Submit claim'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(descriptionController.dispose);
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      descriptionController.dispose();
+    }
   }
 
   void _showClaimDetails(Claim claim) {

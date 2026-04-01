@@ -5,19 +5,97 @@ import '../../models/user_model.dart';
 import '../../models/claim_model.dart';
 import '../../models/plan_model.dart';
 import '../../routes/app_routes.dart';
+import '../../services/api_service.dart';
 import '../../services/tab_router.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  static final ApiService _apiService = ApiService();
+
+  Future<_HomeViewData> _loadHomeViewData() async {
+    final user = await _apiService.getProfile('me');
+    final policy = await _apiService.getPolicy('me');
+    final claims = await _apiService.getClaims('me');
+
+    final maxDaysPerWeek = (policy['maxDaysPerWeek'] as num? ?? 0).toInt();
+    final nextBillingRaw = (policy['nextBillingDate'] as String? ?? '').trim();
+    final nextBillingDate = DateTime.tryParse(nextBillingRaw);
+    final serverNow = nextBillingDate != null
+      ? nextBillingDate.toUtc().subtract(const Duration(days: 7))
+      : DateTime.now().toUtc();
+    final weekStart = serverNow.subtract(Duration(days: serverNow.weekday - 1));
+    final weekEnd = weekStart.add(const Duration(days: 7));
+
+    final claimsThisWeek = claims.where((claim) {
+      final claimDate = claim.date.toUtc();
+      return !claimDate.isBefore(weekStart) && claimDate.isBefore(weekEnd);
+    }).toList();
+
+    final claimsProcessedThisWeek = claimsThisWeek.length;
+    final payoutThisWeek = claimsThisWeek
+      .where((claim) => claim.status == ClaimStatus.settled)
+      .fold<double>(0, (sum, claim) => sum + claim.amount);
+    final daysUntilBilling = nextBillingDate != null
+      ? nextBillingDate.toUtc().difference(serverNow).inDays.clamp(0, 7)
+      : 7;
+    final coveredDaysLeft = (maxDaysPerWeek - claimsProcessedThisWeek)
+      .clamp(0, maxDaysPerWeek)
+      .clamp(0, daysUntilBilling);
+
+    final activePlan = InsurancePlan(
+      name: (policy['plan'] as String? ?? user.plan).trim(),
+      weeklyPremium: (policy['weeklyPremium'] as num? ?? 0).toInt(),
+      perTriggerPayout: (policy['perTriggerPayout'] as num? ?? 0).toInt(),
+      maxDaysPerWeek: (policy['maxDaysPerWeek'] as num? ?? 0).toInt(),
+      isPopular: false,
+    );
+
+    return _HomeViewData(
+      user: user,
+      claims: claims,
+      activePlan: activePlan,
+      earningsProtected: (policy['earningsProtected'] as num? ?? 0).toDouble(),
+      totalEarnings: (user.totalEarnings > 0 ? user.totalEarnings : null),
+      coveredDaysLeft: coveredDaysLeft,
+      claimsProcessedThisWeek: claimsProcessedThisWeek,
+      payoutThisWeek: payoutThisWeek,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = User.getMockUser();
-    final claims = Claim.getMockClaims();
-    final activePlan = InsurancePlan.getPlans().firstWhere(
-      (plan) => plan.name.toLowerCase() == user.plan.toLowerCase(),
-      orElse: () => InsurancePlan.getPlans().first,
+    return FutureBuilder<_HomeViewData>(
+      future: _loadHomeViewData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppColors.scaffoldBackground,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return const Scaffold(
+            backgroundColor: AppColors.scaffoldBackground,
+            body: Center(
+              child: Text(
+                'Failed to load home data. Please retry.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          );
+        }
+
+        return _buildWithData(context, snapshot.data!);
+      },
     );
+  }
+
+  Widget _buildWithData(BuildContext context, _HomeViewData data) {
+    final user = data.user;
+    final claims = data.claims;
+    final activePlan = data.activePlan;
     final currencyFormat = NumberFormat('#,##0.00');
     final todayLabel = DateFormat('EEE, d MMM').format(DateTime.now());
     final dateFormat = DateFormat('d MMM');
@@ -26,59 +104,130 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: AppColors.scaffoldBackground,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final topSectionHeight = constraints.maxHeight * 0.46;
+          final fixedTopHeight = constraints.maxHeight * 0.36;
+          final scrollStart = fixedTopHeight + 10;
 
           return Stack(
             children: [
               Positioned.fill(
                 child: CustomPaint(
                   painter: _HomeTopBackgroundPainter(
-                    topHeight: topSectionHeight,
+                    topHeight: fixedTopHeight + 40,
                   ),
                 ),
               ),
-              SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopHeader(context, user, todayLabel),
-                      const SizedBox(height: 20),
-                      _buildPolicyOverview(user),
-                      const SizedBox(height: 16),
-                      _buildMetricsRow(user, currencyFormat),
-                      const SizedBox(height: 18),
-                      _buildSectionHeader('Quick Actions'),
-                      const SizedBox(height: 10),
-                      _buildQuickActions(context),
-                      const SizedBox(height: 18),
-                      _buildSectionHeader('This Week'),
-                      const SizedBox(height: 10),
-                      _buildWeeklySnapshot(currencyFormat),
-                      const SizedBox(height: 18),
-                      _buildSectionHeader(
-                        'Recent Claims',
-                        actionText: 'View all',
-                        onTap: () {
-                          _openClaims(context);
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _buildRecentClaims(claims, currencyFormat, dateFormat),
-                      const SizedBox(height: 18),
-                      _buildSectionHeader('Next Billing'),
-                      const SizedBox(height: 10),
-                      _buildNextBillingCard(context, activePlan),
-                      const SizedBox(height: 16),
-                      _buildPrimaryActions(context),
-                    ],
-                  ),
-                ),
+              _buildScrollableLowerLayer(
+                context,
+                scrollStart,
+                user,
+                claims,
+                currencyFormat,
+                dateFormat,
+                activePlan,
+                data.earningsProtected,
+                data.totalEarnings,
+                data.coveredDaysLeft,
+                data.claimsProcessedThisWeek,
+                data.payoutThisWeek,
+              ),
+              _buildFixedTopLayer(
+                context,
+                user,
+                todayLabel,
+                currencyFormat,
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildFixedTopLayer(
+    BuildContext context,
+    User user,
+    String todayLabel,
+    NumberFormat currencyFormat,
+  ) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTopHeader(context, user, todayLabel),
+            const SizedBox(height: 20),
+            _buildPolicyOverview(user),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScrollableLowerLayer(
+    BuildContext context,
+    double scrollStart,
+    User user,
+    List<Claim> claims,
+    NumberFormat currencyFormat,
+    DateFormat dateFormat,
+    InsurancePlan activePlan,
+    double earningsProtected,
+    double? totalEarnings,
+    int coveredDaysLeft,
+    int claimsProcessedThisWeek,
+    double payoutThisWeek,
+  ) {
+    return Positioned.fill(
+      top: scrollStart,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.scaffoldBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildMetricsRow(
+                user,
+                currencyFormat,
+                earningsProtected: earningsProtected,
+                totalEarnings: totalEarnings,
+              ),
+              const SizedBox(height: 18),
+              _buildSectionHeader('Quick Actions'),
+              const SizedBox(height: 10),
+              _buildQuickActions(context),
+              const SizedBox(height: 18),
+              _buildSectionHeader('This Week'),
+              const SizedBox(height: 10),
+              _buildWeeklySnapshot(
+                currencyFormat,
+                coveredDaysLeft: coveredDaysLeft,
+                claimsProcessedThisWeek: claimsProcessedThisWeek,
+                payoutThisWeek: payoutThisWeek,
+              ),
+              const SizedBox(height: 18),
+              _buildSectionHeader(
+                'Recent Claims',
+                actionText: 'View all',
+                onTap: () {
+                  _openClaims(context);
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildRecentClaims(claims, currencyFormat, dateFormat),
+              const SizedBox(height: 18),
+              _buildSectionHeader('Next Billing'),
+              const SizedBox(height: 10),
+              _buildNextBillingCard(context, activePlan),
+              const SizedBox(height: 16),
+              _buildPrimaryActions(context),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -251,13 +400,18 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMetricsRow(User user, NumberFormat currencyFormat) {
+  Widget _buildMetricsRow(
+    User user,
+    NumberFormat currencyFormat, {
+    required double earningsProtected,
+    required double? totalEarnings,
+  }) {
     return Row(
       children: [
         Expanded(
           child: _metricCard(
             title: 'Earnings Protected',
-            value: '₹${currencyFormat.format(user.earningsProtected)}',
+            value: '₹${currencyFormat.format(earningsProtected)}',
             subtitle: 'Parametric coverage active',
             icon: Icons.shield,
             iconBackground: AppColors.accentLight,
@@ -268,8 +422,10 @@ class HomeScreen extends StatelessWidget {
         Expanded(
           child: _metricCard(
             title: 'Total Earnings',
-            value: '₹${currencyFormat.format(user.totalEarnings)}',
-            subtitle: 'Synced from ${user.platform}',
+            value: totalEarnings == null ? 'Not Synced' : '₹${currencyFormat.format(totalEarnings)}',
+            subtitle: totalEarnings == null
+                ? 'Pending sync from ${user.platform}'
+                : 'Synced from ${user.platform}',
             icon: Icons.account_balance_wallet_outlined,
             iconBackground: AppColors.infoLight,
             iconColor: AppColors.info,
@@ -487,7 +643,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildWeeklySnapshot(NumberFormat currencyFormat) {
+  Widget _buildWeeklySnapshot(
+    NumberFormat currencyFormat, {
+    required int coveredDaysLeft,
+    required int claimsProcessedThisWeek,
+    required double payoutThisWeek,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -496,7 +657,7 @@ class HomeScreen extends StatelessWidget {
             Expanded(
               child: _miniStatCard(
                 title: 'Covered Days Left',
-                value: '2',
+                value: '$coveredDaysLeft',
                 icon: Icons.calendar_today_outlined,
                 iconColor: AppColors.info,
                 iconBackground: AppColors.infoLight,
@@ -506,7 +667,7 @@ class HomeScreen extends StatelessWidget {
             Expanded(
               child: _miniStatCard(
                 title: 'Claims Processed',
-                value: '1',
+                value: '$claimsProcessedThisWeek',
                 icon: Icons.verified_outlined,
                 iconColor: AppColors.success,
                 iconBackground: AppColors.successLight,
@@ -517,7 +678,7 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(height: 10),
         _miniStatCard(
           title: 'Payout This Week',
-          value: '₹${currencyFormat.format(400)}',
+          value: '₹${currencyFormat.format(payoutThisWeek)}',
           icon: Icons.payments_outlined,
           iconColor: AppColors.primary,
           iconBackground: AppColors.accentLight,
@@ -1242,4 +1403,26 @@ class _HomeTopBackgroundPainter extends CustomPainter {
   bool shouldRepaint(covariant _HomeTopBackgroundPainter oldDelegate) {
     return oldDelegate.topHeight != topHeight;
   }
+}
+
+class _HomeViewData {
+  const _HomeViewData({
+    required this.user,
+    required this.claims,
+    required this.activePlan,
+    required this.earningsProtected,
+    required this.totalEarnings,
+    required this.coveredDaysLeft,
+    required this.claimsProcessedThisWeek,
+    required this.payoutThisWeek,
+  });
+
+  final User user;
+  final List<Claim> claims;
+  final InsurancePlan activePlan;
+  final double earningsProtected;
+  final double? totalEarnings;
+  final int coveredDaysLeft;
+  final int claimsProcessedThisWeek;
+  final double payoutThisWeek;
 }

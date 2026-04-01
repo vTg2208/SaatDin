@@ -13,6 +13,26 @@ class InsurancePlan {
     this.isPopular = false,
   });
 
+  factory InsurancePlan.fromJson(Map<String, dynamic> json) {
+    return InsurancePlan(
+      name: (json['name'] as String? ?? '').trim(),
+      weeklyPremium: (json['weeklyPremium'] as num? ?? 0).toInt(),
+      perTriggerPayout: (json['perTriggerPayout'] as num? ?? 0).toInt(),
+      maxDaysPerWeek: (json['maxDaysPerWeek'] as num? ?? 0).toInt(),
+      isPopular: json['isPopular'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'weeklyPremium': weeklyPremium,
+      'perTriggerPayout': perTriggerPayout,
+      'maxDaysPerWeek': maxDaysPerWeek,
+      'isPopular': isPopular,
+    };
+  }
+
   static List<InsurancePlan> getPlans() {
     return const [
       InsurancePlan(

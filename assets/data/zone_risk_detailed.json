@@ -1,0 +1,254 @@
+{
+  "schema_version": "1.2.0",
+  "generated_for": "SaatDin Parametric Insurance Platform",
+  "city": "Bangalore",
+  "state": "Karnataka",
+  "country": "India",
+  "last_updated": "2026-03-29",
+  "coverage_scope": "Q-commerce delivery riders — Blinkit, Zepto, Swiggy Instamart",
+  "notes": "Detailed review artifact imported for project use. Runtime app consumption should use assets/data/zone_risk_runtime.json for performance.",
+  "source_review_payload_included": true,
+  "methodology": {
+    "flood_risk_score": {
+      "range": "0.0–1.0",
+      "weight_in_composite": 0.45
+    },
+    "aqi_risk_score": {
+      "range": "0.0–1.0",
+      "weight_in_composite": 0.25
+    },
+    "traffic_congestion_score": {
+      "range": "0.0–1.0",
+      "weight_in_composite": 0.30
+    },
+    "composite_risk_score_formula": "composite = (flood_risk × 0.45) + (aqi_risk × 0.25) + (traffic_congestion × 0.30)",
+    "zone_risk_multiplier_formula": "multiplier = 0.85 + (composite_risk_score × 0.75)",
+    "risk_tier_thresholds": {
+      "LOW": "multiplier < 1.05",
+      "MEDIUM": "1.05 ≤ multiplier < 1.30",
+      "HIGH": "1.30 ≤ multiplier < 1.50",
+      "CRITICAL": "multiplier ≥ 1.50"
+    }
+  },
+  "pincodes": {
+    "560103": {
+      "name": "Bellandur",
+      "flood_risk_score": 0.95,
+      "aqi_risk_score": 0.68,
+      "traffic_congestion_score": 0.85,
+      "composite_risk_score": 0.844,
+      "zone_risk_multiplier": 1.48,
+      "risk_tier": "CRITICAL",
+      "custom_rainlock_threshold_mm_3hr": 22
+    },
+    "560037": {
+      "name": "Marathahalli",
+      "flood_risk_score": 0.78,
+      "aqi_risk_score": 0.65,
+      "traffic_congestion_score": 0.93,
+      "composite_risk_score": 0.828,
+      "zone_risk_multiplier": 1.47,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 28
+    },
+    "560068": {
+      "name": "BTM Layout",
+      "flood_risk_score": 0.72,
+      "aqi_risk_score": 0.58,
+      "traffic_congestion_score": 0.96,
+      "composite_risk_score": 0.835,
+      "zone_risk_multiplier": 1.48,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 30
+    },
+    "560066": {
+      "name": "Whitefield",
+      "flood_risk_score": 0.58,
+      "aqi_risk_score": 0.70,
+      "traffic_congestion_score": 0.82,
+      "composite_risk_score": 0.719,
+      "zone_risk_multiplier": 1.39,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560102": {
+      "name": "HSR Layout",
+      "flood_risk_score": 0.52,
+      "aqi_risk_score": 0.48,
+      "traffic_congestion_score": 0.72,
+      "composite_risk_score": 0.579,
+      "zone_risk_multiplier": 1.28,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560034": {
+      "name": "Koramangala (Blocks 1–5)",
+      "flood_risk_score": 0.65,
+      "aqi_risk_score": 0.52,
+      "traffic_congestion_score": 0.78,
+      "composite_risk_score": 0.660,
+      "zone_risk_multiplier": 1.35,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 28
+    },
+    "560095": {
+      "name": "Koramangala (Blocks 6–8) / Ejipura",
+      "flood_risk_score": 0.55,
+      "aqi_risk_score": 0.50,
+      "traffic_congestion_score": 0.75,
+      "composite_risk_score": 0.597,
+      "zone_risk_multiplier": 1.30,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560038": {
+      "name": "Indiranagar",
+      "flood_risk_score": 0.27,
+      "aqi_risk_score": 0.45,
+      "traffic_congestion_score": 0.68,
+      "composite_risk_score": 0.441,
+      "zone_risk_multiplier": 1.18,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 40
+    },
+    "560100": {
+      "name": "Electronic City",
+      "flood_risk_score": 0.42,
+      "aqi_risk_score": 0.74,
+      "traffic_congestion_score": 0.78,
+      "composite_risk_score": 0.617,
+      "zone_risk_multiplier": 1.31,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560035": {
+      "name": "Sarjapur Road",
+      "flood_risk_score": 0.73,
+      "aqi_risk_score": 0.55,
+      "traffic_congestion_score": 0.75,
+      "composite_risk_score": 0.694,
+      "zone_risk_multiplier": 1.37,
+      "risk_tier": "HIGH",
+      "custom_rainlock_threshold_mm_3hr": 28
+    },
+    "560078": {
+      "name": "JP Nagar",
+      "flood_risk_score": 0.38,
+      "aqi_risk_score": 0.47,
+      "traffic_congestion_score": 0.62,
+      "composite_risk_score": 0.477,
+      "zone_risk_multiplier": 1.21,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 40
+    },
+    "560076": {
+      "name": "Bannerghatta Road",
+      "flood_risk_score": 0.45,
+      "aqi_risk_score": 0.52,
+      "traffic_congestion_score": 0.70,
+      "composite_risk_score": 0.543,
+      "zone_risk_multiplier": 1.26,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560024": {
+      "name": "Hebbal",
+      "flood_risk_score": 0.50,
+      "aqi_risk_score": 0.52,
+      "traffic_congestion_score": 0.72,
+      "composite_risk_score": 0.557,
+      "zone_risk_multiplier": 1.27,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 35
+    },
+    "560003": {
+      "name": "Malleswaram",
+      "flood_risk_score": 0.22,
+      "aqi_risk_score": 0.42,
+      "traffic_congestion_score": 0.52,
+      "composite_risk_score": 0.360,
+      "zone_risk_multiplier": 1.12,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 45
+    },
+    "560010": {
+      "name": "Rajajinagar",
+      "flood_risk_score": 0.28,
+      "aqi_risk_score": 0.48,
+      "traffic_congestion_score": 0.58,
+      "composite_risk_score": 0.412,
+      "zone_risk_multiplier": 1.16,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 42
+    },
+    "560001": {
+      "name": "MG Road / Central Bangalore",
+      "flood_risk_score": 0.18,
+      "aqi_risk_score": 0.55,
+      "traffic_congestion_score": 0.65,
+      "composite_risk_score": 0.413,
+      "zone_risk_multiplier": 1.16,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 50
+    },
+    "560017": {
+      "name": "Domlur / Old Airport Road",
+      "flood_risk_score": 0.35,
+      "aqi_risk_score": 0.45,
+      "traffic_congestion_score": 0.65,
+      "composite_risk_score": 0.466,
+      "zone_risk_multiplier": 1.20,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 40
+    },
+    "560064": {
+      "name": "Yelahanka",
+      "flood_risk_score": 0.24,
+      "aqi_risk_score": 0.35,
+      "traffic_congestion_score": 0.40,
+      "composite_risk_score": 0.316,
+      "zone_risk_multiplier": 1.09,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 45
+    },
+    "560032": {
+      "name": "RT Nagar",
+      "flood_risk_score": 0.25,
+      "aqi_risk_score": 0.40,
+      "traffic_congestion_score": 0.45,
+      "composite_risk_score": 0.348,
+      "zone_risk_multiplier": 1.11,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 42
+    },
+    "560047": {
+      "name": "Jayanagar",
+      "flood_risk_score": 0.30,
+      "aqi_risk_score": 0.42,
+      "traffic_congestion_score": 0.55,
+      "composite_risk_score": 0.405,
+      "zone_risk_multiplier": 1.15,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 40
+    },
+    "560085": {
+      "name": "Kengeri",
+      "flood_risk_score": 0.20,
+      "aqi_risk_score": 0.33,
+      "traffic_congestion_score": 0.42,
+      "composite_risk_score": 0.305,
+      "zone_risk_multiplier": 1.08,
+      "risk_tier": "MEDIUM",
+      "custom_rainlock_threshold_mm_3hr": 45
+    }
+  },
+  "network_summary": {
+    "total_pincodes_covered": 20,
+    "risk_tier_distribution": {
+      "CRITICAL": ["560103", "560037", "560068"],
+      "HIGH": ["560034", "560035", "560066", "560100"],
+      "MEDIUM": ["560017", "560024", "560029", "560032", "560038", "560047", "560064", "560076", "560078", "560085", "560095", "560102"],
+      "LOW": []
+    }
+  }
+}

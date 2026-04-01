@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:intl/intl.dart';
 
 import '../../theme/app_colors.dart';
 import '../../models/user_model.dart';
+import '../../models/claim_model.dart';
+import '../../services/api_service.dart';
+import '../../services/tab_router.dart';
 
 class PayoutsScreen extends StatefulWidget {
   const PayoutsScreen({super.key});
@@ -12,43 +16,107 @@ class PayoutsScreen extends StatefulWidget {
 }
 
 class _PayoutsScreenState extends State<PayoutsScreen> {
+  final ApiService _apiService = ApiService();
   final NumberFormat _currencyFormat = NumberFormat('#,##0');
   final DateFormat _dateFormat = DateFormat('d MMM yyyy');
   final DateFormat _monthFormat = DateFormat('MMMM yyyy');
 
-  late List<_PayoutEntry> _payouts = _mockPayouts();
+  List<_PayoutEntry> _payouts = const <_PayoutEntry>[];
+  User? _user;
+  Map<String, dynamic>? _policy;
+  bool _isLoading = true;
   DateTime _lastUpdated = DateTime.now();
 
-  String _primaryUpi = 'arjun@oksbi';
-  String? _backupUpi = 'arjun.backup@okaxis';
+  String _primaryUpi = '';
+  String? _backupUpi;
   bool _primaryVerified = true;
   bool _backupVerified = false;
 
-  Future<void> _refreshPayouts() async {
-    await Future<void>.delayed(const Duration(milliseconds: 850));
+  @override
+  void initState() {
+    super.initState();
+    _loadPayoutData();
+  }
+
+  Future<void> _loadPayoutData() async {
     setState(() {
-      _lastUpdated = DateTime.now();
-      _payouts = List<_PayoutEntry>.from(_payouts)
-        ..insert(
-          0,
-          _PayoutEntry(
-            date: DateTime.now(),
-            triggerType: 'TrafficBlock',
-            amount: 400,
-            upiRef: 'UPI${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-          ),
-        );
+      _isLoading = true;
     });
+
+    try {
+      final user = await _apiService.getProfile('me');
+      final policy = await _apiService.getPolicy('me');
+      final claims = await _apiService.getClaims('me');
+
+      final settled = claims.where((c) => c.status == ClaimStatus.settled).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
+      final payouts = settled
+          .map(
+            (c) => _PayoutEntry(
+              date: c.date,
+              triggerType: c.typeShortName,
+              amount: c.amount.round(),
+              upiRef: c.id.replaceAll('#', ''),
+            ),
+          )
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _policy = policy;
+        _payouts = payouts;
+        _primaryUpi = '${user.phone}@saatdin';
+        _backupUpi = null;
+        _lastUpdated = DateTime.now();
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load payouts from backend.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshPayouts() async {
+    await _loadPayoutData();
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = User.getMockUser();
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final user = _user;
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(
+          child: Text(
+            'Payout data unavailable. Please retry.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
     final currentMonthData = _monthlyData(DateTime.now());
     final previousMonth = DateTime(DateTime.now().year, DateTime.now().month - 1);
     final previousMonthData = _monthlyData(previousMonth);
 
-    final totalPremiumsPaid = 276;
+    final totalPremiumsPaid = ((_policy?['weeklyPremium'] as num? ?? 0) * 4).round();
     final totalPayoutsReceived = _payouts.fold<int>(0, (sum, item) => sum + item.amount);
 
     final estimatedWeeklyEarnings = (user.totalEarnings / 4).round();
@@ -79,59 +147,48 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
                 children: [
                   _buildTopBar(user),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Payouts',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Last updated ${DateFormat('h:mm a').format(_lastUpdated)}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildRoiBanner(
+                  const SizedBox(height: 12),
+                  _buildHeroSummaryCard(
                     totalPremiumsPaid: totalPremiumsPaid,
                     totalPayoutsReceived: totalPayoutsReceived,
                   ),
-                  const SizedBox(height: 18),
-                  const _SectionTitle('Monthly Summary'),
-                  const SizedBox(height: 10),
-                  _buildMonthlySummaryCard(
+                  const SizedBox(height: 12),
+                  _buildKpiStrip(
                     currentMonthData: currentMonthData,
-                    previousMonthData: previousMonthData,
                   ),
                   const SizedBox(height: 20),
-                  const _SectionTitle('Earnings vs Payouts'),
+                  _buildSectionIntro(
+                    title: 'Performance',
+                    subtitle: 'Monthly trend and protection value for this week',
+                  ),
                   const SizedBox(height: 10),
-                  _buildValueRatioCard(
+                  _buildPerformanceCard(
+                    currentMonthData: currentMonthData,
+                    previousMonthData: previousMonthData,
                     estimatedWeeklyEarnings: estimatedWeeklyEarnings,
                     averageWeeklyPayout: averageWeeklyPayout,
                   ),
                   const SizedBox(height: 20),
-                  const _SectionTitle('UPI Management'),
+                  _buildSectionIntro(
+                    title: 'Payout Accounts',
+                    subtitle: 'Manage and verify where settlements are sent',
+                  ),
                   const SizedBox(height: 10),
                   _buildUpiManagementCard(context),
                   const SizedBox(height: 20),
-                  const _SectionTitle('Downloadable Statement'),
+                  _buildSectionIntro(
+                    title: 'Statements',
+                    subtitle: 'Download payout statements for accounting and tax',
+                  ),
                   const SizedBox(height: 10),
                   _buildStatementCard(context),
                   const SizedBox(height: 20),
-                  const _SectionTitle('Payout Feed'),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Pull down to refresh the latest transfers.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  _buildSectionIntro(
+                    title: 'Recent Transfers',
+                    subtitle: 'Pull down to refresh latest transfer events',
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   ..._payouts
                       .map((entry) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -146,27 +203,247 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
+  Widget _buildHeroSummaryCard({
+    required int totalPremiumsPaid,
+    required int totalPayoutsReceived,
+  }) {
+    final netValue = totalPayoutsReceived - totalPremiumsPaid;
+    final isPositive = netValue >= 0;
+    final momentumQuote = _payoutMomentumQuote(
+      totalPayoutsReceived: totalPayoutsReceived,
+      payoutCount: _payouts.length,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primary,
+            AppColors.primaryDark,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.22),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Payouts',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Last updated ${DateFormat('h:mm a').format(_lastUpdated)}',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.86),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _heroMetric(
+                  label: 'Total received',
+                  value: 'Rs ${_currencyFormat.format(totalPayoutsReceived)}',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _heroMetric(
+                  label: isPositive ? 'Net value' : 'Momentum note',
+                  value: isPositive
+                      ? '+Rs ${_currencyFormat.format(netValue.abs())}'
+                      : momentumQuote,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroMetric({required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKpiStrip({
+    required _MonthlySummary currentMonthData,
+  }) {
+    final thisMonth = currentMonthData.totalReceived;
+    final avgPayout = currentMonthData.average;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _kpiChip(
+            label: 'This month',
+            value: 'Rs ${_currencyFormat.format(thisMonth)}',
+            icon: Icons.calendar_month_outlined,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _kpiChip(
+            label: 'Avg payout',
+            value: 'Rs ${_currencyFormat.format(avgPayout)}',
+            icon: Icons.show_chart,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _kpiChip(
+            label: 'Transfers',
+            value: '${_payouts.length}',
+            icon: Icons.swap_horiz,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _kpiChip({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionIntro({
+    required String title,
+    required String subtitle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPerformanceCard({
+    required _MonthlySummary currentMonthData,
+    required _MonthlySummary previousMonthData,
+    required int estimatedWeeklyEarnings,
+    required int averageWeeklyPayout,
+  }) {
+    return Column(
+      children: [
+        _buildMonthlySummaryCard(
+          currentMonthData: currentMonthData,
+          previousMonthData: previousMonthData,
+        ),
+        const SizedBox(height: 10),
+        _buildValueRatioCard(
+          estimatedWeeklyEarnings: estimatedWeeklyEarnings,
+          averageWeeklyPayout: averageWeeklyPayout,
+        ),
+      ],
+    );
+  }
+
   Widget _buildTopBar(User user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              user.name.substring(0, 1).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+        _headerIconButton(
+          icon: Icons.arrow_back,
+          tooltip: 'Back to Home',
+          onTap: () => _switchToTab(0),
         ),
         Row(
           children: [
@@ -177,9 +454,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
             ),
             const SizedBox(width: 10),
             _headerIconButton(
-              icon: Icons.menu,
-              tooltip: 'Menu',
-              onTap: () => _showSimpleInfo('Quick menu shortcuts coming next'),
+              icon: Icons.account_circle_outlined,
+              tooltip: 'Account',
+              onTap: () => _showAccountSheet(user),
             ),
           ],
         ),
@@ -207,48 +484,6 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
           ),
           child: Icon(icon, size: 21, color: AppColors.textPrimary),
         ),
-      ),
-    );
-  }
-
-  Widget _buildRoiBanner({
-    required int totalPremiumsPaid,
-    required int totalPayoutsReceived,
-  }) {
-    final isPositive = totalPayoutsReceived > totalPremiumsPaid;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isPositive ? AppColors.successLight : AppColors.warningLight,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isPositive ? AppColors.success : AppColors.warning,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isPositive ? Icons.trending_up : Icons.shield_outlined,
-            color: isPositive ? AppColors.success : AppColors.warning,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              totalPayoutsReceived > 0
-                  ? 'You\'ve paid Rs ${_currencyFormat.format(totalPremiumsPaid)} in premiums. You\'ve received Rs ${_currencyFormat.format(totalPayoutsReceived)} in payouts.'
-                  : 'Your zone has been calm - Rs ${_currencyFormat.format(totalPremiumsPaid)} invested in protection.',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -386,7 +621,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 });
               },
             ),
-            onVerify: () => _verifyPrimary(),
+            onVerify: _primaryVerified ? null : () => _verifyPrimary(),
           ),
           const Divider(height: 22, color: AppColors.border),
           _upiRow(
@@ -714,7 +949,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 foregroundColor: AppColors.primary,
                 side: const BorderSide(color: AppColors.border),
               ),
-              child: const Text('Verify'),
+              child: Text(verified ? 'Verified' : 'Verify'),
             ),
           ],
         ),
@@ -724,6 +959,19 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
   bool _isUpiAdded(String value) {
     return value.toLowerCase() != 'not added';
+  }
+
+  String _payoutMomentumQuote({
+    required int totalPayoutsReceived,
+    required int payoutCount,
+  }) {
+    if (payoutCount >= 3) {
+      return 'You have rocked this week. Your protection showed up when it mattered.';
+    }
+    if (totalPayoutsReceived > 0) {
+      return 'You are protected and covered. Keep riding confidently.';
+    }
+    return 'Great week so far. Your safety net is active for every shift.';
   }
 
   Widget _card({required Widget child}) {
@@ -771,7 +1019,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
             16,
             8,
             16,
-            MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            math.max(0.0, MediaQuery.of(sheetContext).viewInsets.bottom) + 16,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -858,22 +1106,72 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   void _showSimpleInfo(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
-}
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
+  void _switchToTab(int index) {
+    TabRouter.switchTo(index);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
-      ),
+  void _showAccountSheet(User user) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    user.name.isEmpty ? 'U' : user.name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                title: Text(user.name),
+                subtitle: Text(user.phone),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(4);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Home'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('Claims'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(1);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Coverage details'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(2);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.payments_outlined),
+                title: const Text('Payouts'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchToTab(3);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -954,41 +1252,4 @@ class _PayoutsTopBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-List<_PayoutEntry> _mockPayouts() {
-  final now = DateTime.now();
-
-  return [
-    _PayoutEntry(
-      date: DateTime(now.year, now.month, 24),
-      triggerType: 'RainLock',
-      amount: 400,
-      upiRef: 'UPI48291820',
-    ),
-    _PayoutEntry(
-      date: DateTime(now.year, now.month, 18),
-      triggerType: 'AQI Guard',
-      amount: 320,
-      upiRef: 'UPI48244112',
-    ),
-    _PayoutEntry(
-      date: DateTime(now.year, now.month, 8),
-      triggerType: 'TrafficBlock',
-      amount: 280,
-      upiRef: 'UPI48199033',
-    ),
-    _PayoutEntry(
-      date: DateTime(now.year, now.month - 1, 26),
-      triggerType: 'ZoneLock',
-      amount: 400,
-      upiRef: 'UPI47832109',
-    ),
-    _PayoutEntry(
-      date: DateTime(now.year, now.month - 1, 14),
-      triggerType: 'HeatBlock',
-      amount: 240,
-      upiRef: 'UPI47788941',
-    ),
-  ];
 }

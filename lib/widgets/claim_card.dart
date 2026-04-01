@@ -54,6 +54,8 @@ class ClaimCard extends StatelessWidget {
                     children: [
                       Text(
                         claim.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
