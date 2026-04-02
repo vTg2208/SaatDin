@@ -14,6 +14,7 @@ dependencies:
   intl: ^0.20.2
   http: ^1.2.2
   shared_preferences: ^2.3.3
+  flutter_svg: ^2.0.10+1
 
 dev_dependencies:
   flutter_test:
@@ -28,4 +29,8 @@ flutter:
     - assets/images/
     - assets/images/logo.png
     - assets/images/gig.png
+    - assets/images/swiggy.png
+    - assets/images/zepto.png
+    - assets/images/Blinkit-yellow-rounded.svg
+    - assets/images/zomato-logo-svg-vector_logoshape.png
 
