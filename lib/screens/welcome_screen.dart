@@ -150,7 +150,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: GoogleFonts.dancingScript(
                                       fontSize: 50,
                                       fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF556B2F),
+                                      color: AppColors.primaryDark,
                                       height: 0.8,
                                     ),
                                   ),
@@ -218,15 +218,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               ),
                             ),
                             const SizedBox(height: 20),
-                            const Text(
-                              'After OTP, we will automatically log you in or start registration.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            // const Text(
+                            //   'After OTP, we will automatically log you in or start registration.',
+                            //   textAlign: TextAlign.center,
+                            //   style: TextStyle(
+                            //     fontSize: 12.5,
+                            //     color: AppColors.textSecondary,
+                            //     fontWeight: FontWeight.w600,
+                            //   ),
+                            // ),
                             const SizedBox(height: 12),
                             Container(
                               height: 54,
@@ -242,15 +242,29 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   onTap: _isValid ? _handleContinue : null,
                                   child: Center(
-                                    child: Text(
-                                      _isSendingOtp ? 'Sending OTP...' : 'Continue',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: _isValid
-                                            ? Colors.white
-                                            : AppColors.textSecondary,
-                                      ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _isSendingOtp ? 'Sending OTP...' : 'Continue',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: _isValid
+                                                ? Colors.white
+                                                : AppColors.textSecondary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 18,
+                                          color: _isValid
+                                              ? Colors.white
+                                              : AppColors.textSecondary,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),

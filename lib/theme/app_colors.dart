@@ -4,13 +4,13 @@ class AppColors {
   AppColors._();
 
   // Primary palette
-  static const Color primary = Color(0xFF0D4B3C);
-  static const Color primaryLight = Color(0xFF1A6B52);
-  static const Color primaryDark = Color(0xFF083028);
+  static const Color primary = Color(0xFF13B8AA);
+  static const Color primaryLight = Color(0xFF4CCEC4);
+  static const Color primaryDark = Color(0xFF0E8D83);
 
   // Accent / Teal
-  static const Color accent = Color(0xFF2EC4B6);
-  static const Color accentLight = Color(0xFFE0F7F5);
+  static const Color accent = Color(0xFF13B8AA);
+  static const Color accentLight = Color(0xFFE6F8F6);
 
   // Backgrounds
   static const Color background = Color(0xFFFFFFFF);
@@ -28,8 +28,8 @@ class AppColors {
   static const Color borderLight = Color(0xFFF3F4F6);
 
   // Status colors
-  static const Color success = Color(0xFF10B981);
-  static const Color successLight = Color(0xFFD1FAE5);
+  static const Color success = Color(0xFF13B8AA);
+  static const Color successLight = Color(0xFFE6F8F6);
   static const Color warning = Color(0xFFF59E0B);
   static const Color warningLight = Color(0xFFFEF3C7);
   static const Color error = Color(0xFFEF4444);
@@ -40,22 +40,22 @@ class AppColors {
   // Card colors
   static const Color cardBackground = Color(0xFFFFFFFF);
   static const Color cardSelectedBackground = Color(0xFFF0FDF9);
-  static const Color cardSelectedBorder = Color(0xFF2EC4B6);
+  static const Color cardSelectedBorder = Color(0xFF13B8AA);
 
   // Gradient for welcome screen
   static const List<Color> welcomeGradient = [
-    Color(0xFF0D4B3C),
-    Color(0xFF083028),
-    Color(0xFF05201A),
+    Color(0xFF13B8AA),
+    Color(0xFF0E8D83),
+    Color(0xFF0A6E67),
   ];
 
   // Badge colors
-  static const Color badgePopular = Color(0xFF10B981);
+  static const Color badgePopular = Color(0xFF13B8AA);
   static const Color badgePopularText = Color(0xFFFFFFFF);
-  static const Color badgeVerified = Color(0xFF2EC4B6);
-  static const Color badgeActive = Color(0xFF10B981);
+  static const Color badgeVerified = Color(0xFF13B8AA);
+  static const Color badgeActive = Color(0xFF13B8AA);
 
   // Bottom nav
-  static const Color navActive = Color(0xFF0D4B3C);
+  static const Color navActive = Color(0xFF13B8AA);
   static const Color navInactive = Color(0xFF9CA3AF);
 }
