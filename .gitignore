@@ -36,11 +36,10 @@ analyze_output.txt
 
 # Environment files
 .env
-.env.*
+
 **/.env
-**/.env.*
-!.env.example
-!**/.env.example
+
+
 
 # Symbolication related
 app.*.symbols
