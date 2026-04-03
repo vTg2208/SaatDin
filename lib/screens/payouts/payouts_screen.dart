@@ -39,9 +39,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   }
 
   Future<void> _loadPayoutData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final user = await _apiService.getProfile('me');
@@ -55,9 +53,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
           .map(
             (c) => _PayoutEntry(
               date: c.date,
-              triggerType: c.typeShortName,
+              triggerType: _coerceString(c.typeShortName, fallback: 'Unknown trigger'),
+              triggerRawType: _coerceString(c.type.name),
               amount: c.amount.round(),
-              upiRef: c.id.replaceAll('#', ''),
+              upiRef: _coerceString(c.id).replaceAll('#', ''),
             ),
           )
           .toList();
@@ -67,7 +66,8 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         _user = user;
         _policy = policy;
         _payouts = payouts;
-        _primaryUpi = '${user.phone}@saatdin';
+        final phone = _coerceString(user.phone);
+        _primaryUpi = phone.isEmpty ? '' : '$phone@saatdin';
         _backupUpi = null;
         _lastUpdated = DateTime.now();
       });
@@ -78,23 +78,19 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _refreshPayouts() async {
-    await _loadPayoutData();
-  }
+  Future<void> _refreshPayouts() => _loadPayoutData();
+
+  // ─── Entry point ──────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: AppColors.scaffoldBackground,
+        backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -102,7 +98,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     final user = _user;
     if (user == null) {
       return const Scaffold(
-        backgroundColor: AppColors.scaffoldBackground,
+        backgroundColor: AppColors.background,
         body: Center(
           child: Text(
             'Payout data unavailable. Please retry.',
@@ -112,198 +108,272 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       );
     }
 
-    final currentMonthData = _monthlyData(DateTime.now());
-    final previousMonth = DateTime(DateTime.now().year, DateTime.now().month - 1);
-    final previousMonthData = _monthlyData(previousMonth);
-
+    final now = DateTime.now();
+    final currentMonthData = _monthlyData(now);
+    final previousMonthData = _monthlyData(DateTime(now.year, now.month - 1));
     final totalPremiumsPaid = ((_policy?['weeklyPremium'] as num? ?? 0) * 4).round();
-    final totalPayoutsReceived = _payouts.fold<int>(0, (sum, item) => sum + item.amount);
-
+    final totalPayoutsReceived = _payouts.fold<int>(0, (s, p) => s + p.amount);
     final estimatedWeeklyEarnings = (user.totalEarnings / 4).round();
-    final averageWeeklyPayout = _payouts.isEmpty
-        ? 0
-        : (totalPayoutsReceived / 4).round();
+    final averageWeeklyPayout =
+        _payouts.isEmpty ? 0 : (totalPayoutsReceived / 4).round();
 
     return Scaffold(
-      backgroundColor: AppColors.scaffoldBackground,
-      body: Stack(
-        children: [
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SizedBox(
-              height: 208,
-              child: CustomPaint(
-                painter: _PayoutsTopBackgroundPainter(),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        top: false,
+        child: Stack(
+          children: [
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SizedBox(
+                height: 205,
+                child: CustomPaint(
+                  painter: _PayoutsTopBackgroundPainter(),
+                ),
               ),
             ),
-          ),
-          SafeArea(
-            child: RefreshIndicator(
+            RefreshIndicator(
               onRefresh: _refreshPayouts,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 28),
                 children: [
-                  _buildTopBar(user),
-                  const SizedBox(height: 12),
-                  _buildHeroSummaryCard(
+                  // ── Hero gradient header ──────────────────────────────────────
+                  _buildHeroHeader(
+                    user: user,
                     totalPremiumsPaid: totalPremiumsPaid,
                     totalPayoutsReceived: totalPayoutsReceived,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildKpiStrip(
                     currentMonthData: currentMonthData,
                   ),
-                  const SizedBox(height: 20),
-                  _buildSectionIntro(
-                    title: 'Performance',
-                    subtitle: 'Monthly trend and protection value for this week',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildPerformanceCard(
-                    currentMonthData: currentMonthData,
-                    previousMonthData: previousMonthData,
-                    estimatedWeeklyEarnings: estimatedWeeklyEarnings,
-                    averageWeeklyPayout: averageWeeklyPayout,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildSectionIntro(
-                    title: 'Payout Accounts',
-                    subtitle: 'Manage and verify where settlements are sent',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildUpiManagementCard(context),
-                  const SizedBox(height: 20),
-                  _buildSectionIntro(
-                    title: 'Statements',
-                    subtitle: 'Download payout statements for accounting and tax',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildStatementCard(context),
-                  const SizedBox(height: 20),
-                  _buildSectionIntro(
-                    title: 'Recent Transfers',
-                    subtitle: 'Pull down to refresh latest transfer events',
-                  ),
-                  const SizedBox(height: 4),
-                  const SizedBox(height: 8),
-                  ..._payouts
-                      .map((entry) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
+                  // ── Body content ──────────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildKpiStrip(currentMonthData: currentMonthData),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          title: 'Performance',
+                          subtitle: 'Monthly trend and your protection ratio',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildMonthlySummaryCard(
+                          currentMonthData: currentMonthData,
+                          previousMonthData: previousMonthData,
+                        ),
+                        const SizedBox(height: 10),
+                        _buildValueRatioCard(
+                          estimatedWeeklyEarnings: estimatedWeeklyEarnings,
+                          averageWeeklyPayout: averageWeeklyPayout,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          title: 'Payout Accounts',
+                          subtitle: 'Manage where settlements are sent',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildUpiManagementCard(context),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          title: 'Statements',
+                          subtitle: 'Download records for accounting and tax',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildStatementCard(context),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          title: 'Recent Transfers',
+                          subtitle: '${_payouts.length} settled payouts · pull down to refresh',
+                        ),
+                        const SizedBox(height: 10),
+                        ..._payouts.map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
                             child: _buildPayoutTile(entry),
-                          )),
+                          ),
+                        ),
+                        if (_payouts.isEmpty)
+                          _emptyState(
+                            icon: Icons.account_balance_wallet_outlined,
+                            message: 'No settled payouts yet.\nYour transfers will appear here.',
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeroSummaryCard({
+  // ─── Hero header ──────────────────────────────────────────────────────────
+
+  Widget _buildHeroHeader({
+    required User user,
     required int totalPremiumsPaid,
     required int totalPayoutsReceived,
+    required _MonthlySummary currentMonthData,
   }) {
     final netValue = totalPayoutsReceived - totalPremiumsPaid;
     final isPositive = netValue >= 0;
-    final momentumQuote = _payoutMomentumQuote(
-      totalPayoutsReceived: totalPayoutsReceived,
-      payoutCount: _payouts.length,
-    );
+    final initials = _userInitials(user.name);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary,
-            AppColors.primaryDark,
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _headerIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  onTap: _openHome,
+                ),
+                Row(
+                  children: [
+                    _headerIconButton(
+                      icon: Icons.notifications_none_rounded,
+                      onTap: () => _showSimpleInfo('No new payout alerts'),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _showAccountSheet(user),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Payouts',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.5,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Updated ${DateFormat('h:mm a').format(_lastUpdated)}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _heroPill(
+                      label: 'Total received',
+                      value: '₹${_currencyFormat.format(totalPayoutsReceived)}',
+                      icon: Icons.south_west_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _heroPill(
+                      label: isPositive ? 'Net gain' : 'Coverage note',
+                      value: isPositive
+                          ? '+₹${_currencyFormat.format(netValue.abs())}'
+                          : _payoutMomentumQuote(
+                              totalPayoutsReceived: totalPayoutsReceived,
+                              payoutCount: _payouts.length,
+                            ),
+                      icon: isPositive
+                          ? Icons.trending_up_rounded
+                          : Icons.shield_outlined,
+                      valueColor: isPositive
+                          ? const Color(0xFF6EFFC2)
+                          : Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.22),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+      ),
+    );
+  }
+
+  Widget _heroPill({
+    required String label,
+    required String value,
+    required IconData icon,
+    Color valueColor = Colors.white,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Payouts',
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Last updated ${DateFormat('h:mm a').format(_lastUpdated)}',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.86),
-            ),
-          ),
-          const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: _heroMetric(
-                  label: 'Total received',
-                  value: 'Rs ${_currencyFormat.format(totalPayoutsReceived)}',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _heroMetric(
-                  label: isPositive ? 'Net value' : 'Momentum note',
-                  value: isPositive
-                      ? '+Rs ${_currencyFormat.format(netValue.abs())}'
-                      : momentumQuote,
+              Icon(icon, size: 13, color: Colors.white.withValues(alpha: 0.65)),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroMetric({required String label, required String value}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-          ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 5),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 16,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: valueColor,
+              letterSpacing: -0.3,
+              height: 1.2,
             ),
           ),
         ],
@@ -311,35 +381,70 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
-  Widget _buildKpiStrip({
-    required _MonthlySummary currentMonthData,
-  }) {
-    final thisMonth = currentMonthData.totalReceived;
-    final avgPayout = currentMonthData.average;
+  Widget _iconButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        ),
+        child: Icon(icon, size: 18, color: Colors.white),
+      ),
+    );
+  }
 
+  Widget _headerIconButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Icon(icon, size: 18, color: AppColors.textPrimary),
+      ),
+    );
+  }
+
+  // ─── KPI strip ────────────────────────────────────────────────────────────
+
+  Widget _buildKpiStrip({required _MonthlySummary currentMonthData}) {
     return Row(
       children: [
         Expanded(
           child: _kpiChip(
             label: 'This month',
-            value: 'Rs ${_currencyFormat.format(thisMonth)}',
-            icon: Icons.calendar_month_outlined,
+            value: '₹${_currencyFormat.format(currentMonthData.totalReceived)}',
+            icon: Icons.calendar_today_outlined,
+            iconColor: const Color(0xFF185FA5),
+            iconBg: const Color(0xFFE6F1FB),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _kpiChip(
             label: 'Avg payout',
-            value: 'Rs ${_currencyFormat.format(avgPayout)}',
-            icon: Icons.show_chart,
+            value: '₹${_currencyFormat.format(currentMonthData.average)}',
+            icon: Icons.show_chart_rounded,
+            iconColor: const Color(0xFF3B6D11),
+            iconBg: const Color(0xFFEAF3DE),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _kpiChip(
             label: 'Transfers',
             value: '${_payouts.length}',
-            icon: Icons.swap_horiz,
+            icon: Icons.swap_horiz_rounded,
+            iconColor: AppColors.primary,
+            iconBg: AppColors.accentLight,
           ),
         ),
       ],
@@ -350,9 +455,11 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     required String label,
     required String value,
     required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(14),
@@ -361,15 +468,24 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: AppColors.primary),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(icon, size: 14, color: iconColor),
+          ),
           const SizedBox(height: 8),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 2),
@@ -378,9 +494,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
+              letterSpacing: -0.2,
             ),
           ),
         ],
@@ -388,10 +505,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
-  Widget _buildSectionIntro({
-    required String title,
-    required String subtitle,
-  }) {
+  // ─── Section header ───────────────────────────────────────────────────────
+
+  Widget _buildSectionHeader({required String title, required String subtitle}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -407,7 +523,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         Text(
           subtitle,
           style: const TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             color: AppColors.textSecondary,
           ),
         ),
@@ -415,89 +531,174 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
-  Widget _buildPerformanceCard({
-    required _MonthlySummary currentMonthData,
-    required _MonthlySummary previousMonthData,
-    required int estimatedWeeklyEarnings,
-    required int averageWeeklyPayout,
-  }) {
-    return Column(
-      children: [
-        _buildMonthlySummaryCard(
-          currentMonthData: currentMonthData,
-          previousMonthData: previousMonthData,
-        ),
-        const SizedBox(height: 10),
-        _buildValueRatioCard(
-          estimatedWeeklyEarnings: estimatedWeeklyEarnings,
-          averageWeeklyPayout: averageWeeklyPayout,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopBar(User user) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _headerIconButton(
-          icon: Icons.arrow_back,
-          tooltip: 'Back to Home',
-          onTap: () => _switchToTab(0),
-        ),
-        Row(
-          children: [
-            _headerIconButton(
-              icon: Icons.notifications_none,
-              tooltip: 'Notifications',
-              onTap: () => _showSimpleInfo('No new payout alerts'),
-            ),
-            const SizedBox(width: 10),
-            _headerIconButton(
-              icon: Icons.account_circle_outlined,
-              tooltip: 'Account',
-              onTap: () => _showAccountSheet(user),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _headerIconButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-          ),
-          child: Icon(icon, size: 21, color: AppColors.textPrimary),
-        ),
-      ),
-    );
-  }
+  // ─── Monthly summary card ─────────────────────────────────────────────────
 
   Widget _buildMonthlySummaryCard({
     required _MonthlySummary currentMonthData,
     required _MonthlySummary previousMonthData,
   }) {
-    final thisMonthAmount = currentMonthData.totalReceived;
-    final lastMonthAmount = previousMonthData.totalReceived;
-    final maxValue = (thisMonthAmount > lastMonthAmount
-            ? thisMonthAmount
-            : lastMonthAmount)
-        .clamp(1, 999999);
+    final thisMonth = currentMonthData.totalReceived;
+    final lastMonth = previousMonthData.totalReceived;
+    final maxValue = math.max(thisMonth, lastMonth).clamp(1, 999999);
+    final changePercent = lastMonth == 0
+        ? null
+        : ((thisMonth - lastMonth) / lastMonth * 100).round();
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Three metrics in a row
+          Row(
+            children: [
+              Expanded(
+                child: _metricItem(
+                  label: 'Total received',
+                  value: '₹${_currencyFormat.format(thisMonth)}',
+                ),
+              ),
+              _verticalDivider(),
+              Expanded(
+                child: _metricItem(
+                  label: 'Payouts',
+                  value: '${currentMonthData.count}',
+                ),
+              ),
+              _verticalDivider(),
+              Expanded(
+                child: _metricItem(
+                  label: 'Avg / claim',
+                  value: '₹${_currencyFormat.format(currentMonthData.average)}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Month-over-month change indicator
+          if (changePercent != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: changePercent >= 0
+                    ? const Color(0xFFEAF3DE)
+                    : const Color(0xFFFCEBEB),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    changePercent >= 0
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 12,
+                    color: changePercent >= 0
+                        ? const Color(0xFF3B6D11)
+                        : const Color(0xFFA32D2D),
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${changePercent.abs()}% vs last month',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: changePercent >= 0
+                          ? const Color(0xFF3B6D11)
+                          : const Color(0xFFA32D2D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 14),
+          // Bar comparison
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _bar(
+                  label: 'This month',
+                  amount: thisMonth,
+                  heightFactor: thisMonth / maxValue,
+                  color: AppColors.primary,
+                  maxBarHeight: 60,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _bar(
+                  label: 'Last month',
+                  amount: lastMonth,
+                  heightFactor: lastMonth / maxValue,
+                  color: const Color(0xFFB5D4F4),
+                  maxBarHeight: 60,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bar({
+    required String label,
+    required int amount,
+    required double heightFactor,
+    required Color color,
+    required double maxBarHeight,
+  }) {
+    final clampedFactor = heightFactor.clamp(0.04, 1.0);
+    final barHeight = maxBarHeight * clampedFactor;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: maxBarHeight,
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            width: double.infinity,
+            height: barHeight,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          '₹${_currencyFormat.format(amount)}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Protection value ratio card ──────────────────────────────────────────
+
+  Widget _buildValueRatioCard({
+    required int estimatedWeeklyEarnings,
+    required int averageWeeklyPayout,
+  }) {
+    final maxValue =
+        math.max(estimatedWeeklyEarnings, averageWeeklyPayout).clamp(1, 999999);
+    final coverageRatio = estimatedWeeklyEarnings == 0
+        ? 0.0
+        : (averageWeeklyPayout / estimatedWeeklyEarnings).clamp(0.0, 1.0);
 
     return _card(
       child: Column(
@@ -505,22 +706,297 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: _metricItem(
-                  label: 'Total Received',
-                  value: 'Rs ${_currencyFormat.format(thisMonthAmount)}',
+              const Expanded(
+                child: Text(
+                  'Protection value ratio',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-              Expanded(
-                child: _metricItem(
-                  label: 'Payout Count',
-                  value: '${currentMonthData.count}',
+              // Coverage percentage badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.accentLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${(coverageRatio * 100).round()}% covered',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Payouts vs estimated weekly earnings',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
               Expanded(
-                child: _metricItem(
-                  label: 'Avg / Claim',
-                  value: 'Rs ${_currencyFormat.format(currentMonthData.average)}',
+                child: _bar(
+                  label: 'Est. earnings',
+                  amount: estimatedWeeklyEarnings,
+                  heightFactor: estimatedWeeklyEarnings / maxValue,
+                  color: const Color(0xFFD3D1C7),
+                  maxBarHeight: 80,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _bar(
+                  label: 'Payouts received',
+                  amount: averageWeeklyPayout,
+                  heightFactor: averageWeeklyPayout / maxValue,
+                  color: AppColors.primary,
+                  maxBarHeight: 80,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── UPI management card ──────────────────────────────────────────────────
+
+  Widget _buildUpiManagementCard(BuildContext context) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _upiRow(
+            context: context,
+            label: 'Primary UPI',
+            upiId: _primaryUpi,
+            verified: _primaryVerified,
+            onChangeLabel: 'Change',
+            onChange: () => _editUpi(
+              context,
+              title: 'Change primary UPI',
+              currentValue: _primaryUpi,
+              onSaved: (v) => setState(() {
+                _primaryUpi = v;
+                _primaryVerified = false;
+              }),
+            ),
+            onVerify: _primaryVerified ? null : _verifyPrimary,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Container(height: 1, color: AppColors.border),
+          ),
+          _upiRow(
+            context: context,
+            label: 'Backup UPI',
+            upiId: _backupUpi ?? 'Not added',
+            verified: _backupVerified,
+            onChangeLabel: _backupUpi == null ? 'Add' : 'Change',
+            onChange: () => _editUpi(
+              context,
+              title: _backupUpi == null ? 'Add backup UPI' : 'Change backup UPI',
+              currentValue: _backupUpi,
+              onSaved: (v) => setState(() {
+                _backupUpi = v;
+                _backupVerified = false;
+              }),
+            ),
+            onVerify: _backupUpi == null ? null : _verifyBackup,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _upiRow({
+    required BuildContext context,
+    required String label,
+    required String upiId,
+    required bool verified,
+    required String onChangeLabel,
+    required VoidCallback onChange,
+    VoidCallback? onVerify,
+  }) {
+    final isAdded = upiId.toLowerCase() != 'not added';
+
+    return Row(
+      children: [
+        // Left: icon + text
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: verified && isAdded
+                ? const Color(0xFFEAF3DE)
+                : const Color(0xFFF1EFE8),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(
+            verified && isAdded
+                ? Icons.verified_outlined
+                : Icons.account_balance_wallet_outlined,
+            size: 17,
+            color: verified && isAdded
+                ? const Color(0xFF3B6D11)
+                : AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                upiId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isAdded ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Right: verified badge + action buttons
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: verified && isAdded
+                    ? const Color(0xFFEAF3DE)
+                    : const Color(0xFFFAEEDA),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                verified && isAdded ? 'Verified' : 'Unverified',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: verified && isAdded
+                      ? const Color(0xFF3B6D11)
+                      : const Color(0xFFBA7517),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                _smallAction(
+                  label: onChangeLabel,
+                  onTap: onChange,
+                ),
+                if (onVerify != null) ...[
+                  const SizedBox(width: 6),
+                  _smallAction(
+                    label: 'Verify',
+                    onTap: onVerify,
+                    primary: true,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _smallAction({
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: primary ? AppColors.accentLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: primary ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: primary ? AppColors.primary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Statement card ───────────────────────────────────────────────────────
+
+  Widget _buildStatementCard(BuildContext context) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F1FB),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.description_outlined,
+                  size: 17,
+                  color: Color(0xFF185FA5),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PDF statements',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      _monthFormat.format(DateTime.now()),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -529,20 +1005,19 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
           Row(
             children: [
               Expanded(
-                child: _miniBar(
+                child: _statementButton(
+                  icon: Icons.download_outlined,
                   label: 'This month',
-                  amount: thisMonthAmount,
-                  heightFactor: thisMonthAmount / maxValue,
-                  color: AppColors.primary,
+                  onTap: () => _showSimpleInfo('Monthly PDF statement generated'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _miniBar(
-                  label: 'Last month',
-                  amount: lastMonthAmount,
-                  heightFactor: lastMonthAmount / maxValue,
-                  color: AppColors.info,
+                child: _statementButton(
+                  icon: Icons.date_range_outlined,
+                  label: 'Custom range',
+                  onTap: () => _pickCustomRange(context),
+                  primary: true,
                 ),
               ),
             ],
@@ -552,172 +1027,72 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
-  Widget _buildValueRatioCard({
-    required int estimatedWeeklyEarnings,
-    required int averageWeeklyPayout,
+  Widget _statementButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
   }) {
-    final maxValue =
-        (estimatedWeeklyEarnings > averageWeeklyPayout
-                ? estimatedWeeklyEarnings
-                : averageWeeklyPayout)
-            .clamp(1, 999999);
-
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Your protection value ratio for this week',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        decoration: BoxDecoration(
+          color: primary ? AppColors.accentLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: primary
+                ? AppColors.primary.withValues(alpha: 0.4)
+                : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: primary ? AppColors.primary : AppColors.textSecondary,
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: _ratioBar(
-                  label: 'Est. earnings',
-                  amount: estimatedWeeklyEarnings,
-                  factor: estimatedWeeklyEarnings / maxValue,
-                  color: AppColors.textPrimary,
-                ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: primary ? AppColors.primary : AppColors.textSecondary,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ratioBar(
-                  label: 'Payouts received',
-                  amount: averageWeeklyPayout,
-                  factor: averageWeeklyPayout / maxValue,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildUpiManagementCard(BuildContext context) {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _upiRow(
-            label: 'Primary UPI',
-            upiId: _primaryUpi,
-            verified: _primaryVerified,
-            onChange: () => _editUpi(
-              context,
-              title: 'Change primary UPI',
-              currentValue: _primaryUpi,
-              onSaved: (value) {
-                setState(() {
-                  _primaryUpi = value;
-                  _primaryVerified = false;
-                });
-              },
-            ),
-            onVerify: _primaryVerified ? null : () => _verifyPrimary(),
-          ),
-          const Divider(height: 22, color: AppColors.border),
-          _upiRow(
-            label: 'Backup UPI',
-            upiId: _backupUpi ?? 'Not added',
-            verified: _backupVerified,
-            onChange: () => _editUpi(
-              context,
-              title: _backupUpi == null ? 'Add backup UPI' : 'Change backup UPI',
-              currentValue: _backupUpi,
-              onSaved: (value) {
-                setState(() {
-                  _backupUpi = value;
-                  _backupVerified = false;
-                });
-              },
-            ),
-            onVerify: _backupUpi == null ? null : () => _verifyBackup(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatementCard(BuildContext context) {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Generate statement as PDF for ${_monthFormat.format(DateTime.now())} or custom date range.',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _showSimpleInfo('Monthly PDF statement generated');
-                  },
-                  icon: const Icon(Icons.download_outlined, size: 18),
-                  label: const Text('This month'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _pickCustomRange(context);
-                  },
-                  icon: const Icon(Icons.date_range_outlined, size: 18),
-                  label: const Text('Custom range'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // ─── Payout tile ──────────────────────────────────────────────────────────
 
   Widget _buildPayoutTile(_PayoutEntry entry) {
-    return _card(
+    final iconData = _triggerIconData(entry.triggerRawType);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: AppColors.successLight,
+              color: iconData.background,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.account_balance_wallet_outlined,
-                color: AppColors.success),
+            child: Icon(iconData.icon, size: 18, color: iconData.color),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -725,7 +1100,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 Text(
                   entry.triggerType,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
                   ),
@@ -734,245 +1109,58 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 Text(
                   _dateFormat.format(entry.date),
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  'UPI Ref: ${entry.upiRef}',
+                  'Ref: ${entry.upiRef}',
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 10,
                     color: AppColors.textSecondary,
+                    fontFamily: 'monospace',
                   ),
                 ),
               ],
             ),
           ),
-          Text(
-            'Rs ${_currencyFormat.format(entry.amount)}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppColors.success,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _metricItem({required String label, required String value}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _miniBar({
-    required String label,
-    required int amount,
-    required double heightFactor,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 50,
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: FractionallySizedBox(
-                widthFactor: 1,
-                heightFactor: heightFactor.clamp(0.08, 1.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-          ),
-          Text(
-            'Rs ${_currencyFormat.format(amount)}',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ratioBar({
-    required String label,
-    required int amount,
-    required double factor,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 84,
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: FractionallySizedBox(
-                widthFactor: 1,
-                heightFactor: factor.clamp(0.08, 1.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          Text(
-            'Rs ${_currencyFormat.format(amount)}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _upiRow({
-    required String label,
-    required String upiId,
-    required bool verified,
-    required VoidCallback onChange,
-    VoidCallback? onVerify,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                upiId,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '₹${_currencyFormat.format(entry.amount)}',
                 style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                  letterSpacing: -0.2,
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: verified ? AppColors.successLight : AppColors.warningLight,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                verified ? 'Verified' : 'Unverified',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: verified ? AppColors.success : AppColors.warning,
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF3DE),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Settled',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF3B6D11),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            OutlinedButton(
-              onPressed: onChange,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Text(_isUpiAdded(upiId) ? 'Change' : 'Add'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: onVerify,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Text(verified ? 'Verified' : 'Verify'),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  bool _isUpiAdded(String value) {
-    return value.toLowerCase() != 'not added';
-  }
-
-  String _payoutMomentumQuote({
-    required int totalPayoutsReceived,
-    required int payoutCount,
-  }) {
-    if (payoutCount >= 3) {
-      return 'You have rocked this week. Your protection showed up when it mattered.';
-    }
-    if (totalPayoutsReceived > 0) {
-      return 'You are protected and covered. Keep riding confidently.';
-    }
-    return 'Great week so far. Your safety net is active for every shift.';
-  }
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   Widget _card({required Widget child}) {
     return Container(
@@ -987,19 +1175,146 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
-  _MonthlySummary _monthlyData(DateTime month) {
-    final sameMonthEntries = _payouts.where(
-      (entry) =>
-          entry.date.year == month.year &&
-          entry.date.month == month.month,
+  Widget _metricItem({required String label, required String value}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ],
     );
-
-    final count = sameMonthEntries.length;
-    final total = sameMonthEntries.fold<int>(0, (sum, item) => sum + item.amount);
-    final avg = count == 0 ? 0 : (total / count).round();
-
-    return _MonthlySummary(totalReceived: total, count: count, average: avg);
   }
+
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      height: 32,
+      color: AppColors.border,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+    );
+  }
+
+  Widget _emptyState({required IconData icon, required String message}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 36, color: AppColors.textSecondary),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ({IconData icon, Color color, Color background}) _triggerIconData(String rawType) {
+    switch (rawType.toLowerCase()) {
+      case 'rainlock':
+        return (
+          icon: Icons.water_drop_outlined,
+          color: const Color(0xFF185FA5),
+          background: const Color(0xFFE6F1FB),
+        );
+      case 'trafficblock':
+        return (
+          icon: Icons.traffic_outlined,
+          color: const Color(0xFFBA7517),
+          background: const Color(0xFFFAEEDA),
+        );
+      case 'zonelock':
+        return (
+          icon: Icons.location_off_outlined,
+          color: const Color(0xFF993556),
+          background: const Color(0xFFFBEAF0),
+        );
+      case 'aqiguard':
+        return (
+          icon: Icons.air_outlined,
+          color: const Color(0xFF3B6D11),
+          background: const Color(0xFFEAF3DE),
+        );
+      case 'heatblock':
+        return (
+          icon: Icons.thermostat_outlined,
+          color: const Color(0xFFA32D2D),
+          background: const Color(0xFFFCEBEB),
+        );
+      default:
+        return (
+          icon: Icons.account_balance_wallet_outlined,
+          color: AppColors.primary,
+          background: AppColors.accentLight,
+        );
+    }
+  }
+
+  String _userInitials(String? name) {
+    final safeName = _coerceString(name);
+    final parts = safeName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
+  String _coerceString(Object? value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _payoutMomentumQuote({
+    required int totalPayoutsReceived,
+    required int payoutCount,
+  }) {
+    if (payoutCount >= 3) return 'Strong cover';
+    if (totalPayoutsReceived > 0) return 'Covered';
+    return 'Safety active';
+  }
+
+  _MonthlySummary _monthlyData(DateTime month) {
+    final entries = _payouts.where(
+      (e) => e.date.year == month.year && e.date.month == month.month,
+    );
+    final count = entries.length;
+    final total = entries.fold<int>(0, (s, e) => s + e.amount);
+    return _MonthlySummary(
+      totalReceived: total,
+      count: count,
+      average: count == 0 ? 0 : (total / count).round(),
+    );
+  }
+
+  // ─── Actions / sheets ─────────────────────────────────────────────────────
 
   Future<void> _editUpi(
     BuildContext context, {
@@ -1071,16 +1386,12 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   }
 
   void _verifyPrimary() {
-    setState(() {
-      _primaryVerified = true;
-    });
+    setState(() => _primaryVerified = true);
     _showSimpleInfo('Primary UPI verified');
   }
 
   void _verifyBackup() {
-    setState(() {
-      _backupVerified = true;
-    });
+    setState(() => _backupVerified = true);
     _showSimpleInfo('Backup UPI verified');
   }
 
@@ -1095,12 +1406,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         end: now,
       ),
     );
-
     if (range == null) return;
-
     final from = DateFormat('d MMM').format(range.start);
     final to = DateFormat('d MMM').format(range.end);
-    _showSimpleInfo('Custom statement generated for $from - $to');
+    _showSimpleInfo('Custom statement generated for $from – $to');
   }
 
   void _showSimpleInfo(String message) {
@@ -1112,7 +1421,12 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  void _openHome() => _switchToTab(0);
+
   void _showAccountSheet(User user) {
+    final safeName = _coerceString(user.name, fallback: 'User');
+    final safePhone = _coerceString(user.phone, fallback: 'No phone on file');
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1125,12 +1439,15 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                 leading: CircleAvatar(
                   backgroundColor: AppColors.primary,
                   child: Text(
-                    user.name.isEmpty ? 'U' : user.name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    _userInitials(safeName).substring(0, 1),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                title: Text(user.name),
-                subtitle: Text(user.phone),
+                title: Text(safeName),
+                subtitle: Text(safePhone),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _switchToTab(4);
@@ -1160,14 +1477,6 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                   _switchToTab(2);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.payments_outlined),
-                title: const Text('Payouts'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _switchToTab(3);
-                },
-              ),
             ],
           ),
         );
@@ -1176,16 +1485,20 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   }
 }
 
+// ─── Data models ──────────────────────────────────────────────────────────────
+
 class _PayoutEntry {
   const _PayoutEntry({
     required this.date,
     required this.triggerType,
+    required this.triggerRawType,
     required this.amount,
     required this.upiRef,
   });
 
   final DateTime date;
   final String triggerType;
+  final String triggerRawType;
   final int amount;
   final String upiRef;
 }
@@ -1207,47 +1520,50 @@ class _PayoutsTopBackgroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final base = Paint()
+    final backgroundPaint = Paint()
       ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
         colors: [
-          Color(0xFFE8F7EE),
-          Color(0xFFEFFAF4),
-          Color(0xFFF8FCFA),
+          Color(0xFFF4F8F5),
+          Color(0xFFEDF4F0),
+          Color(0xFFE7EFEA),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), base);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
 
-    final curve = Paint()..color = AppColors.primary.withValues(alpha: 0.08);
-    final path = Path()
+    final accentPaint = Paint()
+      ..color = AppColors.primary.withValues(alpha: 0.07)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(Offset(size.width * 0.12, size.height * 0.22), 54, accentPaint);
+    canvas.drawCircle(Offset(size.width * 0.84, size.height * 0.26), 34, accentPaint);
+
+    final curvePaint = Paint()..color = Colors.white.withValues(alpha: 0.4);
+    final curvePath = Path()
       ..moveTo(0, size.height * 0.72)
-      ..quadraticBezierTo(
-        size.width * 0.35,
-        size.height * 0.56,
-        size.width * 0.72,
-        size.height * 0.74,
+      ..cubicTo(
+        size.width * 0.16,
+        size.height * 0.60,
+        size.width * 0.34,
+        size.height * 0.84,
+        size.width * 0.52,
+        size.height * 0.72,
       )
-      ..quadraticBezierTo(
-        size.width * 0.88,
-        size.height * 0.82,
+      ..cubicTo(
+        size.width * 0.70,
+        size.height * 0.60,
+        size.width * 0.84,
+        size.height * 0.80,
         size.width,
-        size.height * 0.68,
+        size.height * 0.70,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
 
-    canvas.drawPath(path, curve);
-
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = AppColors.accent.withValues(alpha: 0.22);
-
-    canvas.drawCircle(Offset(size.width * 0.16, size.height * 0.24), 26, ringPaint);
-    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.18), 34, ringPaint);
+    canvas.drawPath(curvePath, curvePaint);
   }
 
   @override
