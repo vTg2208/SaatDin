@@ -7,7 +7,11 @@ import '../../widgets/progress_dots.dart';
 import '../../routes/app_routes.dart';
 
 class ZoneSelectionScreen extends StatefulWidget {
-  const ZoneSelectionScreen({super.key});
+  const ZoneSelectionScreen({super.key, this.initialArgs, this.zonesLoader});
+
+  final Map<String, dynamic>? initialArgs;
+  final Future<List<ZoneRisk>> Function(ApiService apiService, String platform)?
+  zonesLoader;
 
   @override
   State<ZoneSelectionScreen> createState() => _ZoneSelectionScreenState();
@@ -17,15 +21,32 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
   final ApiService _apiService = ApiService();
   int? _selectedIndex;
   List<ZoneRisk> _zones = const <ZoneRisk>[];
+  late Future<List<ZoneRisk>> _zonesFuture;
+  late String _platform;
+  late String _phone;
+  late String _name;
+  bool _didInit = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInit) return;
+
+    final routeArgs =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args = routeArgs ?? widget.initialArgs ?? const <String, dynamic>{};
+
+    _platform = (args['platform'] as String?) ?? 'Blinkit';
+    _phone = (args['phone'] as String?)?.trim() ?? '';
+    _name = (args['name'] as String?)?.trim() ?? '';
+    _zonesFuture =
+        widget.zonesLoader?.call(_apiService, _platform) ??
+        _apiService.getZonesForPlatform(_platform);
+    _didInit = true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final platform = (args?['platform'] as String?) ?? 'Blinkit';
-    final phone = (args?['phone'] as String?)?.trim() ?? '';
-    final name = (args?['name'] as String?)?.trim() ?? '';
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -57,7 +78,7 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const ProgressDots(total: 4, current: 1),
+              const ProgressDots(total: 4, current: 2),
               const SizedBox(height: 28),
               const Text(
                 'Select your zone',
@@ -70,7 +91,7 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Available zones for $platform. Pricing and trigger thresholds adapt per pincode.',
+                'Available zones for $_platform. Pricing and trigger thresholds adapt per pincode.',
                 style: const TextStyle(
                   fontSize: 15,
                   color: AppColors.textSecondary,
@@ -80,7 +101,7 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
               const SizedBox(height: 16),
               Expanded(
                 child: FutureBuilder<List<ZoneRisk>>(
-                  future: _apiService.getZonesForPlatform(platform),
+                  future: _zonesFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -126,7 +147,7 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
                               decoration: BoxDecoration(
                                 color: selected
                                     ? AppColors.primary.withValues(alpha: 0.08)
-                                  : AppColors.cardBackground,
+                                    : AppColors.cardBackground,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: selected
@@ -180,7 +201,8 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _selectedIndex == null || _selectedIndex! >= _zones.length
+                  onPressed:
+                      _selectedIndex == null || _selectedIndex! >= _zones.length
                       ? null
                       : () {
                           final selectedZone = _zones[_selectedIndex!];
@@ -190,11 +212,11 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
                             context,
                             AppRoutes.planSelect,
                             arguments: {
-                              'platform': platform,
+                              'platform': _platform,
                               'zone': selectedZone.name,
                               'pincode': selectedZone.pincode,
-                              'phone': phone,
-                              'name': name,
+                              'phone': _phone,
+                              'name': _name,
                             },
                           );
                         },

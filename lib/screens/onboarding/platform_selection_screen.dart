@@ -7,7 +7,15 @@ import '../../widgets/progress_dots.dart';
 import '../../routes/app_routes.dart';
 
 class PlatformSelectionScreen extends StatefulWidget {
-  const PlatformSelectionScreen({super.key});
+  const PlatformSelectionScreen({
+    super.key,
+    this.initialArgs,
+    this.platformsLoader,
+  });
+
+  final Map<String, dynamic>? initialArgs;
+  final Future<List<DeliveryPlatform>> Function(ApiService apiService)?
+  platformsLoader;
 
   @override
   State<PlatformSelectionScreen> createState() =>
@@ -18,17 +26,34 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
   final ApiService _apiService = ApiService();
   int? _selectedIndex;
   List<DeliveryPlatform> _platforms = DeliveryPlatform.getPlatforms();
+  late Future<List<DeliveryPlatform>> _platformsFuture;
+  late String _phone;
+  late String _name;
+  bool _didInit = false;
 
   bool get _canContinue =>
-      _selectedIndex != null && _selectedIndex! >= 0 && _selectedIndex! < _platforms.length;
+      _selectedIndex != null &&
+      _selectedIndex! >= 0 &&
+      _selectedIndex! < _platforms.length;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInit) return;
+
+    final routeArgs =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args = routeArgs ?? widget.initialArgs ?? const <String, dynamic>{};
+
+    _phone = (args['phone'] as String?)?.trim() ?? '';
+    _name = (args['name'] as String?)?.trim() ?? '';
+    _platformsFuture =
+        widget.platformsLoader?.call(_apiService) ?? _apiService.getPlatforms();
+    _didInit = true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final phone = (args?['phone'] as String?)?.trim() ?? '';
-    final name = (args?['name'] as String?)?.trim() ?? '';
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -64,7 +89,7 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
               const SizedBox(height: 24),
 
               // Progress dots
-              const ProgressDots(total: 4, current: 0),
+              const ProgressDots(total: 4, current: 1),
               const SizedBox(height: 28),
 
               // Title
@@ -91,7 +116,7 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
               // Platform cards
               Expanded(
                 child: FutureBuilder<List<DeliveryPlatform>>(
-                  future: _apiService.getPlatforms(),
+                  future: _platformsFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -107,9 +132,11 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
                       );
                     }
 
-                    final platforms = snapshot.data ?? const <DeliveryPlatform>[];
+                    final platforms =
+                        snapshot.data ?? const <DeliveryPlatform>[];
                     _platforms = platforms;
-                    if (_selectedIndex != null && _selectedIndex! >= platforms.length) {
+                    if (_selectedIndex != null &&
+                        _selectedIndex! >= platforms.length) {
                       _selectedIndex = null;
                     }
 
@@ -155,10 +182,9 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
                             context,
                             AppRoutes.zoneSelect,
                             arguments: {
-                              'platform':
-                                  _platforms[_selectedIndex!].name,
-                              'phone': phone,
-                              'name': name,
+                              'platform': _platforms[_selectedIndex!].name,
+                              'phone': _phone,
+                              'name': _name,
                             },
                           );
                         }
