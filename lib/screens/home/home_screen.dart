@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../models/user_model.dart';
@@ -154,6 +154,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // Returns the icon and background colour for a trigger message based on its type.
+  // ignore: unused_element
   ({IconData icon, Color background, Color iconColor}) _triggerIconData(String message) {
     final lower = message.toLowerCase();
     if (lower.contains('rain')) {
@@ -195,6 +196,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // Returns a short human-readable title for a trigger message.
+  // ignore: unused_element
   String _triggerTitle(String message) {
     final lower = message.toLowerCase();
     if (lower.contains('rain')) return 'Rain payout incoming';
@@ -205,6 +207,7 @@ class HomeScreen extends StatelessWidget {
     return 'Payout incoming';
   }
 
+  // ignore: unused_element
   InlineSpan _buildAmountHighlightedSpan(String message, TextStyle baseStyle) {
     final amountPattern = RegExp(r'₹[\d,]+(?:\.\d+)?');
     final match = amountPattern.firstMatch(message);
@@ -324,6 +327,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _buildFixedTopLayer(
     BuildContext context,
     User user,
@@ -352,6 +356,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _buildScrollableLowerLayer(
     BuildContext context,
     double scrollStart,
@@ -704,7 +709,7 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$planTitle',
+            planTitle,
             style: const TextStyle(
               fontSize: 42,
               fontWeight: FontWeight.w800,
@@ -1467,6 +1472,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   void _showQuickMenuSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -1751,6 +1757,7 @@ class HomeScreen extends StatelessWidget {
 
   // ─── Account options sheet ────────────────────────────────────────────────
 
+  // ignore: unused_element
   void _showAccountOptions(BuildContext context, User user) {
     showModalBottomSheet<void>(
       context: context,
@@ -1978,6 +1985,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _headerIconButton({
     required IconData icon,
     required String tooltip,

@@ -381,6 +381,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _iconButton({required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
