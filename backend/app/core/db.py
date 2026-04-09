@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Any, Dict, Optional
 
 import asyncpg
@@ -89,6 +90,12 @@ async def init_db() -> None:
             )
             """
         )
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_score DOUBLE PRECISION")
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_threshold DOUBLE PRECISION")
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_flagged BOOLEAN")
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_model_version TEXT")
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_features_json JSONB")
+        await conn.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS anomaly_scored_at TIMESTAMPTZ")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS zonelock_reports (
@@ -305,14 +312,44 @@ async def create_claim(
     description: str,
     zone_pincode: str,
     source: str,
+    anomaly_score: Optional[float] = None,
+    anomaly_threshold: Optional[float] = None,
+    anomaly_flagged: Optional[bool] = None,
+    anomaly_model_version: Optional[str] = None,
+    anomaly_features: Optional[Dict[str, Any]] = None,
+    anomaly_scored_at: Optional[str | datetime] = None,
 ) -> Dict[str, Any]:
     now = _utc_now_iso()
+    anomaly_scored_at_value: Optional[datetime]
+    if anomaly_scored_at is None:
+        anomaly_scored_at_value = now if anomaly_score is not None else None
+    elif isinstance(anomaly_scored_at, str):
+        anomaly_scored_at_value = datetime.fromisoformat(anomaly_scored_at)
+    else:
+        anomaly_scored_at_value = anomaly_scored_at
+    anomaly_features_payload = json.dumps(anomaly_features) if anomaly_features is not None else None
+
     pool = await _get_pool()
     async with pool.acquire() as conn:
         claim_id = await conn.fetchval(
             """
-            INSERT INTO claims (phone, claim_type, status, amount, description, zone_pincode, source, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO claims (
+                phone,
+                claim_type,
+                status,
+                amount,
+                description,
+                zone_pincode,
+                source,
+                created_at,
+                anomaly_score,
+                anomaly_threshold,
+                anomaly_flagged,
+                anomaly_model_version,
+                anomaly_features_json,
+                anomaly_scored_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14)
             RETURNING id
             """,
             phone,
@@ -323,6 +360,12 @@ async def create_claim(
             zone_pincode,
             source,
             now,
+            anomaly_score,
+            anomaly_threshold,
+            anomaly_flagged,
+            anomaly_model_version,
+            anomaly_features_payload,
+            anomaly_scored_at_value,
         )
 
     return {
@@ -335,6 +378,12 @@ async def create_claim(
         "zone_pincode": zone_pincode,
         "source": source,
         "created_at": _to_iso(now),
+        "anomaly_score": anomaly_score,
+        "anomaly_threshold": anomaly_threshold,
+        "anomaly_flagged": anomaly_flagged,
+        "anomaly_model_version": anomaly_model_version,
+        "anomaly_features_json": anomaly_features,
+        "anomaly_scored_at": _to_iso(anomaly_scored_at_value) if anomaly_scored_at_value is not None else None,
     }
 
 
@@ -359,6 +408,17 @@ async def total_settled_amount_for_phone(phone: str) -> float:
             phone,
         )
     return float(value or 0)
+
+
+async def count_claims_for_phone_since(phone: str, since: datetime) -> int:
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        value = await conn.fetchval(
+            "SELECT COUNT(*) FROM claims WHERE phone = $1 AND created_at >= $2",
+            phone,
+            since,
+        )
+    return int(value or 0)
 
 
 async def has_recent_auto_claim(phone: str, claim_type: str, within_minutes: int = 360) -> bool:

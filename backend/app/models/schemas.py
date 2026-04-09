@@ -135,6 +135,10 @@ class ClaimOut(BaseModel):
     date: str
     description: str
     source: str
+    anomalyScore: Optional[float] = None
+    anomalyThreshold: Optional[float] = None
+    anomalyFlagged: Optional[bool] = None
+    anomalyModelVersion: Optional[str] = None
 
 
 class ZoneLockReportRequest(BaseModel):

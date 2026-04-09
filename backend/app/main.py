@@ -14,6 +14,7 @@ from .core.zone_cache import load_zone_map
 from .services.trigger_monitor import trigger_monitor
 from .services.ml_premium import initialize_premium_model
 from .services.external_apis import initialize_api_client, close_api_client
+from .services.fraud_isolation import initialize_fraud_model
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -27,6 +28,9 @@ async def lifespan(_: FastAPI):
     
     # Initialize ML model for dynamic premium calculation
     initialize_premium_model()
+
+    # Initialize fraud anomaly model for claim scoring
+    initialize_fraud_model()
     
     # Initialize external API client for real trigger data
     await initialize_api_client()

@@ -59,12 +59,22 @@ Edit `.env` and set:
 
 ```env
 SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
+FRAUD_SCORING_ENABLED=true
+FRAUD_MODEL_PATH=backend/models/fraud/fraud_iforest_latest.joblib
+FRAUD_ANOMALY_THRESHOLD=-0.05
+FRAUD_FAIL_OPEN=true
 ```
 
 Optional: migrate existing local SQLite data into Supabase once:
 
 ```powershell
 python backend/scripts/migrate_sqlite_to_supabase.py --sqlite backend/backend_data.db --supabase-db-url "postgresql://postgres:<password>@<host>:5432/postgres"
+```
+
+Train/version fraud anomaly model artifact:
+
+```powershell
+python backend/scripts/train_isolation_forest.py --output-dir backend/models/fraud --version v1
 ```
 
 Start backend server:
@@ -147,6 +157,7 @@ python -m pip install -r backend/requirements.txt --upgrade
 flutter analyze
 flutter test
 python -m compileall backend/app/main.py
+python backend/scripts/train_isolation_forest.py --output-dir backend/models/fraud --version v1
 ```
 
 ## 10. Notes

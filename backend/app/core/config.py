@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     tomtom_api_key: str = ""
     news_api_key: str = ""
 
+    # Fraud scoring (Isolation Forest)
+    fraud_scoring_enabled: bool = True
+    fraud_model_path: str = ""
+    fraud_anomaly_threshold: float = -0.05
+    fraud_fail_open: bool = True
+    fraud_metrics_log_every_n: int = 25
+
     cors_origins: List[str] = [
         "http://localhost",
         "http://localhost:3000",
@@ -52,6 +59,15 @@ class Settings(BaseSettings):
         if self.zone_data_path:
             return Path(self.zone_data_path)
         return Path(__file__).resolve().parents[3] / "assets" / "data" / "zone_risk_runtime.json"
+
+    @property
+    def fraud_model_file_path(self) -> Path:
+        if self.fraud_model_path:
+            configured = Path(self.fraud_model_path)
+            if configured.is_absolute():
+                return configured
+            return Path(__file__).resolve().parents[3] / configured
+        return Path(__file__).resolve().parents[2] / "models" / "fraud" / "fraud_iforest_latest.joblib"
 
     @property
     def database_url(self) -> str:

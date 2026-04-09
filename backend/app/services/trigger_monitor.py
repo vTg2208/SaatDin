@@ -8,10 +8,11 @@ from collections import defaultdict
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from ..core.db import create_claim, has_recent_auto_claim, list_workers_by_zone
+from ..core.db import count_claims_for_phone_since, create_claim, has_recent_auto_claim, list_workers_by_zone
 from ..core.zone_cache import load_zone_map, resolve_zone
 from .premium import build_plans
 from .external_apis import get_api_client, TRIGGER_THRESHOLDS
+from .fraud_isolation import score_claim
 from ..models.platform import Platform
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ async def force_trigger_for_zone(
 
     workers = await list_workers_by_zone(pincode)
     created = 0
+    flagged_for_review = 0
+    zone_lat, zone_lon = _zone_center_coordinates(zone)
     for worker in workers:
         phone = str(worker["phone"])
 
@@ -70,22 +73,58 @@ async def force_trigger_for_zone(
         )
 
         payout = float(selected.perTriggerPayout) * _TRIGGER_PAYOUT_FACTORS.get(state["alertType"], 0.7)
+        zone_affinity = calculate_zone_affinity_score(phone, zone_lat, zone_lon)
+        fraud_ring = get_fraud_ring_members(phone)
+        recent_claims_24h = await count_claims_for_phone_since(
+            phone,
+            datetime.now(timezone.utc) - timedelta(hours=24),
+        )
+        anomaly_features = {
+            "zone_affinity_score": zone_affinity,
+            "fraud_ring_size": float(len(fraud_ring)),
+            "recent_claims_24h": float(recent_claims_24h),
+            "claim_amount": float(round(payout, 2)),
+            "trigger_confidence": float(state.get("confidence", 0.55)),
+            "is_manual_source": 0.0,
+            "is_auto_source": 1.0,
+            "flood_risk_score": float(zone.get("flood_risk_score", 0.5)),
+            "aqi_risk_score": float(zone.get("aqi_risk_score", 0.5)),
+            "traffic_congestion_score": float(zone.get("traffic_congestion_score", 0.5)),
+        }
+        anomaly = score_claim(
+            anomaly_features,
+            context={
+                "phone": phone,
+                "claim_type": claim_type,
+                "source": source,
+            },
+        )
+        claim_status = "in_review" if bool(anomaly["anomaly_flagged"]) else "settled"
+        if claim_status == "in_review":
+            flagged_for_review += 1
         await create_claim(
             phone=phone,
             claim_type=claim_type,
-            status="settled",
+            status=claim_status,
             amount=round(payout, 2),
             description=f"Auto-settled: {alert_title}. Data source: {source}.",
             zone_pincode=pincode,
             source=source,
+            anomaly_score=float(anomaly["anomaly_score"]),
+            anomaly_threshold=float(anomaly["anomaly_threshold"]),
+            anomaly_flagged=bool(anomaly["anomaly_flagged"]),
+            anomaly_model_version=str(anomaly["anomaly_model_version"]),
+            anomaly_features=dict(anomaly["anomaly_features"]),
+            anomaly_scored_at=str(anomaly["anomaly_scored_at"]),
         )
         created += 1
 
     logger.info(
-        "trigger_forced pincode=%s claim_type=%s created=%s source=%s",
+        "trigger_forced pincode=%s claim_type=%s created=%s flagged_for_review=%s source=%s",
         pincode,
         claim_type,
         created,
+        flagged_for_review,
         source,
     )
     return {
@@ -163,14 +202,20 @@ def get_fraud_ring_members(phone: str) -> set:
     return _fraud_ring_clusters.get(fingerprint_hash, set())
 
 
+def _zone_center_coordinates(zone: Dict[str, Any]) -> tuple[float, float]:
+    coords = zone.get("coordinates_approx", {})
+    zone_lat = float(zone.get("latitude", coords.get("lat", 12.97)))
+    zone_lon = float(zone.get("longitude", coords.get("lon", 77.59)))
+    return zone_lat, zone_lon
+
+
 async def _determine_trigger(zone: Dict[str, Any]) -> Dict[str, Any]:
     """
     Determine active trigger for a zone using real API data.
     Falls back to zone risk scores if APIs unavailable.
     """
     api_client = get_api_client()
-    zone_lat = float(zone.get("latitude", 12.97))
-    zone_lon = float(zone.get("longitude", 77.59))
+    zone_lat, zone_lon = _zone_center_coordinates(zone)
 
     # Try real APIs first, fall back to zone risk scores
     flood = float(zone.get("flood_risk_score", 0.0))
@@ -322,15 +367,17 @@ async def refresh_live_trigger_state() -> None:
         if claim_type == "none" or alert_type == "none":
             continue
 
+        zone_lat, zone_lon = _zone_center_coordinates(zone)
         workers = await list_workers_by_zone(pincode)
+        worker_phones = {str(worker["phone"]) for worker in workers}
         for worker in workers:
             phone = str(worker["phone"])
             
             # Fraud scoring: multiple checks before auto-claim
             zone_affinity = calculate_zone_affinity_score(
                 phone,
-                float(zone.get("latitude", 12.97)),
-                float(zone.get("longitude", 77.59)),
+                zone_lat,
+                zone_lon,
             )
             fraud_ring = get_fraud_ring_members(phone)
             
@@ -344,7 +391,7 @@ async def refresh_live_trigger_state() -> None:
             # Check for fraud ring activity on same event
             same_event_ring_claims = sum(
                 1 for member in fraud_ring
-                if member != phone and member in [w["phone"] for w in workers]
+                if member != phone and member in worker_phones
             )
             if same_event_ring_claims > 2:
                 logger.warning(
@@ -365,17 +412,48 @@ async def refresh_live_trigger_state() -> None:
             )
 
             payout = float(selected.perTriggerPayout) * _TRIGGER_PAYOUT_FACTORS.get(alert_type, 0.7)
+            recent_claims_24h = await count_claims_for_phone_since(
+                phone,
+                datetime.now(timezone.utc) - timedelta(hours=24),
+            )
+            anomaly_features = {
+                "zone_affinity_score": zone_affinity,
+                "fraud_ring_size": float(len(fraud_ring)),
+                "recent_claims_24h": float(recent_claims_24h),
+                "claim_amount": float(round(payout, 2)),
+                "trigger_confidence": float(state.get("confidence", 0.55)),
+                "is_manual_source": 0.0,
+                "is_auto_source": 1.0,
+                "flood_risk_score": float(zone.get("flood_risk_score", 0.5)),
+                "aqi_risk_score": float(zone.get("aqi_risk_score", 0.5)),
+                "traffic_congestion_score": float(zone.get("traffic_congestion_score", 0.5)),
+            }
+            anomaly = score_claim(
+                anomaly_features,
+                context={
+                    "phone": phone,
+                    "claim_type": claim_type,
+                    "source": "auto",
+                },
+            )
+            claim_status = "in_review" if bool(anomaly["anomaly_flagged"]) else "settled"
             await create_claim(
                 phone=phone,
                 claim_type=claim_type,
-                status="settled",
+                status=claim_status,
                 amount=round(payout, 2),
                 description=f"Auto-settled: {state['alertTitle']}. Data source: {state.get('dataSource', 'unknown')}.",
                 zone_pincode=pincode,
                 source="auto",
+                anomaly_score=float(anomaly["anomaly_score"]),
+                anomaly_threshold=float(anomaly["anomaly_threshold"]),
+                anomaly_flagged=bool(anomaly["anomaly_flagged"]),
+                anomaly_model_version=str(anomaly["anomaly_model_version"]),
+                anomaly_features=dict(anomaly["anomaly_features"]),
+                anomaly_scored_at=str(anomaly["anomaly_scored_at"]),
             )
             logger.info(
-                f"auto_claim_created phone={phone} claim_type={claim_type} payout={payout} zone_affinity={zone_affinity:.2f} data_source={state.get('dataSource')}"
+                f"auto_claim_created phone={phone} claim_type={claim_type} payout={payout} status={claim_status} anomaly_score={anomaly['anomaly_score']:.6f} anomaly_flagged={anomaly['anomaly_flagged']} zone_affinity={zone_affinity:.2f} data_source={state.get('dataSource')}"
             )
 
 
