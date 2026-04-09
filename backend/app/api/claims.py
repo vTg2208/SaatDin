@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -41,6 +42,15 @@ def _normalize_claim_type(raw: str) -> str:
 
 
 def _to_claim_out(row: dict) -> ClaimOut:
+    anomaly_features_raw = row.get("anomaly_features_json")
+    if isinstance(anomaly_features_raw, str):
+        try:
+            anomaly_features_raw = json.loads(anomaly_features_raw)
+        except json.JSONDecodeError:
+            anomaly_features_raw = None
+    anomaly_features = anomaly_features_raw if isinstance(anomaly_features_raw, dict) else None
+    anomaly_scored_at = row.get("anomaly_scored_at")
+
     return ClaimOut(
         id=f"#C{int(row['id']):05d}",
         claimType=str(row["claim_type"]),
@@ -53,6 +63,8 @@ def _to_claim_out(row: dict) -> ClaimOut:
         anomalyThreshold=float(row["anomaly_threshold"]) if row.get("anomaly_threshold") is not None else None,
         anomalyFlagged=bool(row["anomaly_flagged"]) if row.get("anomaly_flagged") is not None else None,
         anomalyModelVersion=str(row["anomaly_model_version"]) if row.get("anomaly_model_version") is not None else None,
+        anomalyScoredAt=str(anomaly_scored_at) if anomaly_scored_at is not None else None,
+        anomalyFeaturesJson=anomaly_features,
     )
 
 

@@ -33,6 +33,22 @@ _TRIGGER_PAYOUT_FACTORS = {
 }
 
 
+def _claim_type_to_alert_key(claim_type: str) -> str:
+    normalized = claim_type.strip().lower().replace(" ", "").replace("_", "")
+    mapping = {
+        "rain": "rain",
+        "rainlock": "rain",
+        "aqi": "aqi",
+        "aqiguard": "aqi",
+        "traffic": "traffic",
+        "trafficblock": "traffic",
+        "zonelock": "zonelock",
+        "heat": "heat",
+        "heatblock": "heat",
+    }
+    return mapping.get(normalized, normalized)
+
+
 async def force_trigger_for_zone(
     zone_key: str,
     claim_type: str,
@@ -42,9 +58,10 @@ async def force_trigger_for_zone(
     source: str = "manual",
 ) -> Dict[str, Any]:
     pincode, zone = resolve_zone(zone_key)
+    alert_type = _claim_type_to_alert_key(claim_type)
     state = {
         "hasActiveAlert": True,
-        "alertType": claim_type.lower().replace(" ", ""),
+        "alertType": alert_type,
         "claimType": claim_type,
         "alertTitle": alert_title,
         "alertDescription": alert_description,
@@ -72,7 +89,7 @@ async def force_trigger_for_zone(
             plans[1],
         )
 
-        payout = float(selected.perTriggerPayout) * _TRIGGER_PAYOUT_FACTORS.get(state["alertType"], 0.7)
+        payout = float(selected.perTriggerPayout) * _TRIGGER_PAYOUT_FACTORS.get(alert_type, 0.7)
         zone_affinity = calculate_zone_affinity_score(phone, zone_lat, zone_lon)
         fraud_ring = get_fraud_ring_members(phone)
         recent_claims_24h = await count_claims_for_phone_since(
