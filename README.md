@@ -7,7 +7,41 @@ Parametric income insurance for Q-commerce delivery riders in Bangalore — buil
 
 ---
 
-## Table of Contents
+## 🟢 Implementation Status — Phase 2 Complete
+
+> Last updated: April 2026. Phase 2 delivered. Issues #8, #9, #18, and #19 resolved in the current sprint.
+
+| Feature / Module | Status | Notes |
+|---|---|---|
+| Worker onboarding (OTP + registration) | ✅ Implemented | Auth flow, zone + plan selection live |
+| ZAPE premium engine | ✅ Implemented | Zone risk multiplier, weekly recalc |
+| RainLock trigger | ✅ Implemented | Open-Meteo, 35mm/3hr threshold |
+| AQI Guard trigger | ✅ Implemented | WAQI API, AQI > 250 threshold |
+| TrafficBlock trigger | ✅ Implemented | TomTom API, < 5 kmph threshold |
+| ZoneLock trigger (auto) | ✅ Implemented | NewsAPI + keyword NLP |
+| **ZoneLock manual report UI** | ✅ Implemented | Full-screen form, loading/success/error states (Issue #8) |
+| Claims list + history | ✅ Implemented | Filterable by status, live from backend |
+| **Claim escalation UI** | ✅ Implemented | Reason selection, SLA messaging, success animation (Issue #9) |
+| HeatBlock trigger | ✅ Implemented | Open-Meteo, temp > 39°C + humidity > 70% |
+| Payout dashboard | ✅ Implemented | Monthly trends, UPI management, statement download |
+| GPS variance fraud detection | ✅ Implemented | Layer A rule engine |
+| Isolation Forest fraud model | 🔄 In progress | Issue #14 — training on synthetic data |
+| LLM fallback (Groq + Gemini) | 🔄 In progress | Issue #15 — LangGraph orchestration |
+| Razorpay sandbox payouts | 🔄 In progress | Issue #11 — sandbox integration |
+| Admin escalation dashboard | 🔄 In progress | Issue #13 — review queue UI |
+| External API key hardening | 🔄 In progress | Issue #12 — ENV management |
+| **Analyzer warning cleanup** | ✅ Implemented | Zero-warning baseline, CI guardrail added (Issue #19) |
+| **Documentation alignment** | ✅ Implemented | This status matrix (Issue #18) |
+| Accelerometer motion analysis | 📋 Planned | Phase 3 |
+| Cell tower triangulation | 📋 Planned | Phase 3 |
+| Temporal co-claim graph | 📋 Planned | Phase 3 |
+| Reinsurance-backed pandemic rider | 📋 Planned | Phase 3 |
+
+**Legend:** ✅ Implemented · 🔄 In progress · 📋 Planned
+
+---
+
+
 
 - [Problem](#problem)
 - [Solution](#solution)
