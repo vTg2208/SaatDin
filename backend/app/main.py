@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from .api import auth, claims, fraud_clusters, health, plans, platforms, policy, triggers, workers, zones
+from .api import admin, auth, claims, fraud_clusters, health, plans, platforms, policy, triggers, workers, zones
 from .core.config import settings
 from .core.db import close_db, init_db
 from .core.logging import configure_logging
@@ -19,6 +22,7 @@ from .services.fraud_isolation import initialize_fraud_model
 
 configure_logging()
 logger = logging.getLogger(__name__)
+ADMIN_UI_DIR = Path(__file__).resolve().parents[1] / "admin_ui"
 
 
 @asynccontextmanager
@@ -72,3 +76,14 @@ app.include_router(claims.router, prefix="/api/v1/claims")
 app.include_router(workers.router, prefix="/api/v1")
 app.include_router(triggers.router, prefix="/api/v1/triggers")
 app.include_router(fraud_clusters.router, prefix="/api/v1/fraud")
+app.include_router(admin.router, prefix="/api/v1/admin")
+
+if ADMIN_UI_DIR.exists():
+    app.mount("/admin/assets", StaticFiles(directory=ADMIN_UI_DIR), name="admin-assets")
+
+
+@app.get("/admin", include_in_schema=False)
+@app.get("/admin/{path:path}", include_in_schema=False)
+async def admin_ui(path: str = "") -> FileResponse:
+    _ = path
+    return FileResponse(ADMIN_UI_DIR / "index.html")

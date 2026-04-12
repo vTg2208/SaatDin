@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 60 * 24
 
+    admin_username: str = "admin"
+    admin_password: str = "saatdin-admin"
+    admin_session_minutes: int = 12 * 60
+
     otp_ttl_seconds: int = 300
     otp_max_attempts: int = 5
     otp_send_cooldown_seconds: int = 30
