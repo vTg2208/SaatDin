@@ -7,6 +7,8 @@ import '../../models/user_model.dart';
 import '../../services/api_service.dart';
 import '../../widgets/claim_card.dart';
 import '../../services/tab_router.dart';
+import 'zone_lock_report_screen.dart';
+import 'escalation_screen.dart';
 
 class ClaimsScreen extends StatefulWidget {
   const ClaimsScreen({super.key});
@@ -210,12 +212,29 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showNewClaimSheet();
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ZoneLock quick-report button (Issue #8)
+          Tooltip(
+            message: 'Report ZoneLock',
+            child: FloatingActionButton.small(
+              heroTag: 'fab_zonelock',
+              onPressed: _openZoneLockReport,
+              backgroundColor: AppColors.warning,
+              child: const Icon(Icons.lock_person_outlined, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: 'fab_new_claim',
+            onPressed: () {
+              _showNewClaimSheet();
+            },
+            backgroundColor: AppColors.primary,
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -724,26 +743,131 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) {
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Claim ${claim.id}',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              // Claim header
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Claim ${claim.id}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        '${claim.typeShortName} · ${claim.statusLabel}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text('Type: ${claim.typeShortName}'),
-              Text('Status: ${claim.statusLabel}'),
-              Text('Amount: Rs ${claim.amount.toStringAsFixed(0)}'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              // Details row
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    _DetailItem(
+                      label: 'Amount',
+                      value: 'Rs ${claim.amount.toStringAsFixed(0)}',
+                    ),
+                    const VerticalDivider(width: 32),
+                    _DetailItem(
+                      label: 'Status',
+                      value: claim.statusLabel,
+                    ),
+                    const VerticalDivider(width: 32),
+                    _DetailItem(
+                      label: 'Type',
+                      value: claim.typeShortName,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               const Text(
                 'Our reviewer will update this timeline as soon as verification completes.',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
+              const SizedBox(height: 20),
+              // Escalate button (Issue #9)
+              if (claim.status == ClaimStatus.inReview ||
+                  claim.status == ClaimStatus.pending)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(
+                      Icons.escalator_warning_rounded,
+                      color: AppColors.error,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      'Escalate this claim',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onPressed: () async {
+                      Navigator.of(sheetCtx).pop();
+                      final submitted =
+                          await EscalationSheet.show(context, claim);
+                      if (submitted == true && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Escalation submitted. A senior reviewer will contact you within 48 hrs.'
+                            ),
+                          ),
+                        );
+                        await _loadClaims();
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.error),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -751,7 +875,56 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     );
   }
 
-  
+  Future<void> _openZoneLockReport() async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const ZoneLockReportScreen(),
+      ),
+    );
+    if (submitted == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ZoneLock report submitted successfully!'),
+        ),
+      );
+      await _loadClaims();
+    }
+  }
+
+}
+
+// Helper widget for claim detail row items
+class _DetailItem extends StatelessWidget {
+  const _DetailItem({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ClaimsTopBackgroundPainter extends CustomPainter {

@@ -38,13 +38,13 @@ class PlatformCard extends StatelessWidget {
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? platform.iconBackground : AppColors.border,
+            color: isSelected ? selectedIndicatorColor : AppColors.border,
             width: isSelected ? 2.5 : 1,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: platform.iconBackground.withValues(alpha: 0.15),
+                    color: selectedIndicatorColor.withValues(alpha: 0.15),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   )
