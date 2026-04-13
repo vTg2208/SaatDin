@@ -31,7 +31,7 @@ class DeliveryPlatform {
         name: 'Zepto',
         deliveryTime: '10-min delivery',
         coverageLevel: 'Higher coverage',
-        logoPath: 'assets/images/Zepto_Logo.svg',
+        logoPath: 'assets/images/zepto.png',
         iconColor: Colors.white,
         iconBackground: Color(0xFF5E248F),
       ),

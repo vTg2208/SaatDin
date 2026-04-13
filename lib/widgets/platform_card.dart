@@ -17,7 +17,12 @@ class PlatformCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool isSvg = platform.logoPath.toLowerCase().endsWith('.svg');
+    final isZepto = platform.name.toLowerCase().contains('zepto');
+    final logoPath = isZepto
+        ? 'assets/images/zepto.png'
+        : platform.logoPath;
+    bool isSvg = logoPath.toLowerCase().endsWith('.svg');
+    final iconSize = isZepto ? 64.0 : 52.0;
     final selectedIndicatorColor = platform.iconBackground.computeLuminance() < 0.7
         ? platform.iconBackground
         : platform.iconColor;
@@ -50,8 +55,8 @@ class PlatformCard extends StatelessWidget {
           children: [
             // Platform icon/logo
             Container(
-              width: 52,
-              height: 52,
+              width: iconSize,
+              height: iconSize,
               decoration: BoxDecoration(
                 color: platform.iconBackground,
                 borderRadius: BorderRadius.circular(12),
@@ -62,7 +67,7 @@ class PlatformCard extends StatelessWidget {
                     ? Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: SvgPicture.asset(
-                          platform.logoPath,
+                          logoPath,
                           placeholderBuilder: (BuildContext context) => Center(
                             child: SizedBox(
                               width: 24,
@@ -78,8 +83,8 @@ class PlatformCard extends StatelessWidget {
                         ),
                       )
                     : Image.asset(
-                        platform.logoPath,
-                        fit: BoxFit.cover,
+                        logoPath,
+                        fit: isZepto ? BoxFit.contain : BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Icon(
                           Icons.delivery_dining,
                           color: platform.iconColor,
