@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from ..core.config import settings
+from .zonelock_nlp import classify_disruption_text
 
 try:
     import aiohttp
@@ -80,6 +81,7 @@ class ExternalAPIClient:
             params = {
                 "latitude": latitude,
                 "longitude": longitude,
+                "hourly": "precipitation",
                 "precipitation_unit": "mm",
                 "timezone": "Asia/Kolkata",
                 "past_days": 1,
@@ -213,16 +215,22 @@ class ExternalAPIClient:
             if not data or data.get("articles") is None or len(data["articles"]) == 0:
                 return None
 
-            # Check first article for disruption keywords
-            first_article = data["articles"][0]
-            title = str(first_article.get("title", "")).lower()
-            description = str(first_article.get("description", "")).lower()
-            content = f"{title} {description}"
+            best_match = None
+            best_confidence = 0.0
+            for article in data["articles"][:8]:
+                title = str(article.get("title", "")).strip()
+                description = str(article.get("description", "")).strip()
+                content = f"{zone_name} {pincode} {title} {description}"
+                classified = classify_disruption_text(content)
+                if not classified:
+                    continue
+                confidence = float(classified.get("confidence", 0.0))
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_match = str(classified.get("category"))
 
-            disruption_keywords = ["curfew", "bandh", "strike", "shutdown", "closure", "lockdown"]
-            for keyword in disruption_keywords:
-                if keyword in content:
-                    return keyword
+            if best_match:
+                return best_match
 
             return None
         except Exception as e:

@@ -9,3 +9,7 @@ APScheduler==3.10.4
 aiohttp==3.10.1
 scikit-learn==1.5.2
 joblib==1.4.2
+httpx==0.28.1
+aiosqlite==0.20.0
+pytest==8.4.1
+pytest-asyncio==0.24.0

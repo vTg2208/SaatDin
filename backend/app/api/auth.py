@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -13,6 +14,16 @@ from ..models.schemas import ApiResponse, AuthTokenOut, OtpRequest, OtpVerifyReq
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger(__name__)
+
+
+def _parse_dt(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 async def _send_sms(phone_number: str, otp: str) -> None:
@@ -32,7 +43,7 @@ async def send_otp(payload: OtpRequest) -> ApiResponse:
     now = datetime.now(timezone.utc)
 
     if existing:
-        last_sent_at = datetime.fromisoformat(existing["last_sent_at"])
+        last_sent_at = _parse_dt(existing["last_sent_at"])
         elapsed = (now - last_sent_at).total_seconds()
         if elapsed < settings.otp_send_cooldown_seconds:
             remaining = int(settings.otp_send_cooldown_seconds - elapsed)
@@ -76,7 +87,7 @@ async def verify_otp(payload: OtpVerifyRequest) -> ApiResponse:
         logger.warning("otp_verify_attempt_limit_exceeded phone=%s", phone)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OTP attempt limit exceeded")
 
-    expires_at = datetime.fromisoformat(stored["expires_at"])
+    expires_at = _parse_dt(stored["expires_at"])
     if datetime.now(timezone.utc) > expires_at:
         await delete_otp(phone)
         logger.warning("otp_verify_expired phone=%s", phone)

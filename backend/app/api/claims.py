@@ -6,11 +6,12 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 
-from ..core.db import count_claims_for_phone_since, create_claim, list_claims_for_phone, escalate_claim, get_claim_escalation
+from ..core.db import count_claims_for_phone_since, create_claim, list_claims_for_phone, escalate_claim, get_claim
 from ..core.dependencies import get_current_worker
 from ..core.zone_cache import resolve_zone
 from ..models.schemas import ApiResponse, ClaimOut, ClaimSubmitRequest, ClaimEscalateRequest, ClaimEscalationOut
 from ..services.fraud_isolation import score_claim
+from ..services.gps_validation import evaluate_worker_gps_signal, gps_features_from_validation
 from ..services.motion_validation import evaluate_worker_motion_signal, motion_features_from_validation
 from ..services.tower_validation import evaluate_worker_tower_signal, tower_features_from_validation
 from ..services.trigger_monitor import calculate_zone_affinity_score, get_fraud_ring_members
@@ -135,6 +136,7 @@ async def _build_manual_claim_features(worker: dict, amount: float) -> dict:
         zone_lon=zone_lon,
     )
     motion_validation = await evaluate_worker_motion_signal(phone=phone)
+    gps_validation = await evaluate_worker_gps_signal(phone=phone)
 
     features = {
         "zone_affinity_score": zone_affinity,
@@ -150,6 +152,7 @@ async def _build_manual_claim_features(worker: dict, amount: float) -> dict:
     }
     features.update(tower_features_from_validation(tower_validation))
     features.update(motion_features_from_validation(motion_validation))
+    features.update(gps_features_from_validation(gps_validation))
     return features
 
 
@@ -236,9 +239,11 @@ async def escalate_claim_endpoint(
         raise HTTPException(status_code=400, detail="Escalation reason required")
 
     phone = str(worker["phone"])
-    
-    # TODO: Verify that claim_id belongs to this phone (add check)
-    # For now, we'll allow escalation
+    claim = await get_claim(claim_id)
+    if claim is None:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+    if str(claim.get("phone")) != phone:
+        raise HTTPException(status_code=403, detail="Claim does not belong to requesting worker")
 
     escalation = await escalate_claim(
         claim_id=claim_id,

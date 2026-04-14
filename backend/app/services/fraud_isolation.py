@@ -309,6 +309,48 @@ def _motion_adjustment_from_features(features: Mapping[str, Any]) -> Dict[str, A
     }
 
 
+def _gps_adjustment_from_features(features: Mapping[str, Any]) -> Dict[str, Any]:
+    status = str(features.get("gps_validation_status", "missing")).strip().lower()
+    confidence = max(0.0, min(1.0, _coerce_feature_value(features.get("gps_variance_score"), 0.5)))
+    present = _coerce_feature_value(features.get("gps_signal_present"), 0.0) >= 0.5
+    jump_ratio = max(0.0, min(1.0, _coerce_feature_value(features.get("gps_jump_ratio"), 0.0)))
+    variance_meters = max(0.0, _coerce_feature_value(features.get("gps_variance_meters"), 0.0))
+
+    if not present or status == "missing":
+        return {
+            "applied": False,
+            "adjustment": 0.0,
+            "status": status or "missing",
+            "confidence": confidence,
+            "reason": "gps_signal_not_found",
+            "present": present,
+            "jump_ratio": jump_ratio,
+            "variance_meters": variance_meters,
+        }
+
+    adjustment = (confidence - 0.5) * 0.16
+    if jump_ratio >= 0.5:
+        adjustment = min(adjustment, -0.10)
+    elif jump_ratio > 0.0:
+        adjustment = min(adjustment, -0.05)
+
+    if variance_meters > 5000:
+        adjustment = min(adjustment, -0.08)
+    elif variance_meters < 300 and confidence >= 0.75:
+        adjustment = max(adjustment, 0.04)
+
+    return {
+        "applied": abs(adjustment) > 0.0,
+        "adjustment": adjustment,
+        "status": status or "mixed",
+        "confidence": confidence,
+        "reason": str(features.get("gps_validation_reason", "gps_variance_mixed")),
+        "present": present,
+        "jump_ratio": jump_ratio,
+        "variance_meters": variance_meters,
+    }
+
+
 def score_claim(
     features: Mapping[str, Any],
     *,
@@ -373,7 +415,13 @@ def score_claim(
         raw_score = float(_model.decision_function(feature_vector)[0])
         tower_adjustment = _tower_adjustment_from_features(features)
         motion_adjustment = _motion_adjustment_from_features(features)
-        adjusted_score = raw_score + float(tower_adjustment["adjustment"]) + float(motion_adjustment["adjustment"])
+        gps_adjustment = _gps_adjustment_from_features(features)
+        adjusted_score = (
+            raw_score
+            + float(tower_adjustment["adjustment"])
+            + float(motion_adjustment["adjustment"])
+            + float(gps_adjustment["adjustment"])
+        )
         flagged = adjusted_score < threshold
         scoring_features: Dict[str, Any] = dict(normalized)
         scoring_features.update(
@@ -393,6 +441,15 @@ def score_claim(
                 "motion_signal_age_minutes": _coerce_feature_value(features.get("motion_signal_age_minutes"), 0.0),
                 "motion_signal_received_at": features.get("motion_signal_received_at"),
                 "motion_score_adjustment": round(float(motion_adjustment["adjustment"]), 6),
+                "gps_variance_score": round(float(gps_adjustment["confidence"]), 3),
+                "gps_validation_status": str(gps_adjustment["status"]),
+                "gps_validation_reason": str(gps_adjustment["reason"]),
+                "gps_signal_present": 1.0 if bool(gps_adjustment["present"]) else 0.0,
+                "gps_signal_age_minutes": _coerce_feature_value(features.get("gps_signal_age_minutes"), 0.0),
+                "gps_signal_received_at": features.get("gps_signal_received_at"),
+                "gps_variance_meters": round(float(gps_adjustment["variance_meters"]), 3),
+                "gps_jump_ratio": round(float(gps_adjustment["jump_ratio"]), 3),
+                "gps_score_adjustment": round(float(gps_adjustment["adjustment"]), 6),
                 "model_raw_score": round(raw_score, 6),
             }
         )
@@ -408,6 +465,12 @@ def score_claim(
                 "motion_signal_eligible": float(scoring_features["motion_signal_eligible"]),
                 "motion_signal_age_minutes": float(scoring_features["motion_signal_age_minutes"]),
                 "motion_score_adjustment": float(scoring_features["motion_score_adjustment"]),
+                "gps_variance_score": float(scoring_features["gps_variance_score"]),
+                "gps_signal_present": float(scoring_features["gps_signal_present"]),
+                "gps_signal_age_minutes": float(scoring_features["gps_signal_age_minutes"]),
+                "gps_variance_meters": float(scoring_features["gps_variance_meters"]),
+                "gps_jump_ratio": float(scoring_features["gps_jump_ratio"]),
+                "gps_score_adjustment": float(scoring_features["gps_score_adjustment"]),
                 "model_raw_score": float(scoring_features["model_raw_score"]),
             }
         )

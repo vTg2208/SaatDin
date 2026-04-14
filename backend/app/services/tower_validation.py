@@ -55,6 +55,12 @@ def _iter_cells(tower_metadata: Mapping[str, Any]) -> Iterable[Dict[str, Any]]:
         for neighbor in neighbors[:max_neighbors]:
             if isinstance(neighbor, Mapping):
                 yield dict(neighbor)
+    raw_cells = tower_metadata.get("cells")
+    if isinstance(raw_cells, list):
+        max_neighbors = max(0, int(settings.tower_signal_max_neighbors))
+        for neighbor in raw_cells[: max_neighbors + 1]:
+            if isinstance(neighbor, Mapping):
+                yield dict(neighbor)
 
 
 def validate_tower_metadata_for_zone(

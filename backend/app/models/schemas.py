@@ -29,6 +29,13 @@ class RegisterRequest(BaseModel):
     name: Optional[str] = None
 
 
+class WorkerUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    platformName: Optional[str] = None
+    zone: Optional[str] = None
+    planName: Optional[str] = None
+
+
 class ZoneOut(BaseModel):
     pincode: str
     name: str
@@ -87,6 +94,12 @@ class TowerMetadataIn(BaseModel):
     servingCell: Optional[TowerCellMetaIn] = None
     neighborCells: List[TowerCellMetaIn] = Field(default_factory=list, max_length=16)
     networkZoneHintPincode: Optional[str] = Field(default=None, max_length=16)
+    transport: Optional[str] = Field(default=None, max_length=24)
+    carrier: Optional[str] = Field(default=None, max_length=120)
+    networkOperator: Optional[str] = Field(default=None, max_length=32)
+    simOperator: Optional[str] = Field(default=None, max_length=32)
+    capturedAtMs: Optional[int] = Field(default=None, ge=0)
+    networkTypes: List[str] = Field(default_factory=list, max_length=8)
 
 
 class MotionMetadataIn(BaseModel):
@@ -179,6 +192,8 @@ class PolicyOut(BaseModel):
     perTriggerPayout: int
     maxDaysPerWeek: int
     nextBillingDate: str
+    cleanStreakWeeks: int = 0
+    loyaltyDiscountPercent: float = 0.0
 
 
 class PolicyUpdateRequest(BaseModel):
@@ -255,6 +270,16 @@ class ClaimEscalationOut(BaseModel):
     status: str
     reviewNotes: Optional[str] = None
     createdAt: str
+
+
+class PayoutAccountUpdateRequest(BaseModel):
+    upiId: str = Field(min_length=5, max_length=120)
+
+
+class ClaimReviewRequest(BaseModel):
+    status: str = Field(min_length=3, max_length=32)
+    reviewNotes: Optional[str] = Field(default=None, max_length=500)
+    escalationId: Optional[int] = Field(default=None, ge=1)
 
 
 class FraudClusterRunOut(BaseModel):

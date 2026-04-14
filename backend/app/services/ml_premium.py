@@ -179,5 +179,5 @@ def get_premium_insights(
     return {
         "premium": round(premium_value, 2),
         "factors": insights,
-        "nextReviewDate": "Every Sunday",  # ZAPE recalculation cadence
+        "nextReviewDate": "On next pricing refresh",
     }

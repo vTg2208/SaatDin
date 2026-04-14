@@ -20,6 +20,7 @@ from ..models.schemas import (
     LocationSignalValidationOut,
     MotionValidationOut,
     RegisterRequest,
+    WorkerUpdateRequest,
     TowerValidationOut,
     WorkerLocationSignalRequest,
     WorkerOut,
@@ -32,6 +33,11 @@ from ..services.trigger_monitor import update_worker_gps
 
 router = APIRouter(tags=["workers"])
 logger = logging.getLogger(__name__)
+
+
+def _safe_policy_id(zone_pincode: str) -> str:
+    suffix = (zone_pincode or "0000")[-4:]
+    return f"SR-{suffix.rjust(4, '0')}"
 
 
 @router.post("/register", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
@@ -97,14 +103,15 @@ async def get_worker_status(current_phone: str = Depends(get_current_phone)) -> 
             message="No worker profile found",
         )
 
+    zone_pincode = str(worker.get("zone_pincode") or "")
     out = WorkerOut(
-        name=worker["name"],
-        phone=worker["phone"],
-        platform=worker["platform_name"],
-        zone=worker["zone_name"],
-        zonePincode=worker["zone_pincode"],
-        plan=worker["plan_name"],
-        policyId=f"SR-{worker['zone_pincode'][-4:]}",
+        name=str(worker.get("name") or "Worker"),
+        phone=str(worker.get("phone") or current_phone),
+        platform=str(worker.get("platform_name") or "Unknown"),
+        zone=str(worker.get("zone_name") or "Unknown"),
+        zonePincode=zone_pincode,
+        plan=str(worker.get("plan_name") or "Unknown"),
+        policyId=_safe_policy_id(zone_pincode),
         totalEarnings=0,
         earningsProtected=0,
     )
@@ -117,20 +124,70 @@ async def get_worker_status(current_phone: str = Depends(get_current_phone)) -> 
 
 @router.get("/workers/me", response_model=ApiResponse)
 async def get_my_worker(worker: dict = Depends(get_current_worker)) -> ApiResponse:
-    logger.info("worker_profile_requested phone=%s", worker["phone"])
-    settled_total = await total_settled_amount_for_phone(str(worker["phone"]))
+    phone = str(worker.get("phone") or "")
+    zone_pincode = str(worker.get("zone_pincode") or "")
+    logger.info("worker_profile_requested phone=%s", phone)
+    settled_total = await total_settled_amount_for_phone(phone)
     out = WorkerOut(
-        name=worker["name"],
-        phone=worker["phone"],
-        platform=worker["platform_name"],
-        zone=worker["zone_name"],
-        zonePincode=worker["zone_pincode"],
-        plan=worker["plan_name"],
-        policyId=f"SR-{worker['zone_pincode'][-4:]}",
+        name=str(worker.get("name") or "Worker"),
+        phone=phone,
+        platform=str(worker.get("platform_name") or "Unknown"),
+        zone=str(worker.get("zone_name") or "Unknown"),
+        zonePincode=zone_pincode,
+        plan=str(worker.get("plan_name") or "Unknown"),
+        policyId=_safe_policy_id(zone_pincode),
         totalEarnings=round(settled_total),
         earningsProtected=round(settled_total),
     )
     return ApiResponse(success=True, data=out)
+
+
+@router.put("/workers/me", response_model=ApiResponse)
+async def update_my_worker(
+    payload: WorkerUpdateRequest,
+    worker: dict = Depends(get_current_worker),
+) -> ApiResponse:
+    platform_name = payload.platformName or str(worker["platform_name"])
+    zone_key = payload.zone or str(worker["zone_pincode"])
+    plan_name = payload.planName or str(worker["plan_name"])
+    worker_name = (payload.name or str(worker["name"])).strip() or str(worker["name"])
+
+    pincode, zone_data = resolve_zone(zone_key)
+    platform = Platform.from_input(platform_name)
+    if not supports_platform(zone_data, platform):
+        raise HTTPException(status_code=400, detail=f"Platform {platform_name} not supported")
+
+    plans = build_plans(float(zone_data.get("zone_risk_multiplier", 1.0)), platform, zone_data=zone_data)
+    selected = next((p for p in plans if p.name.lower() == plan_name.strip().lower()), None)
+    if not selected:
+        raise HTTPException(status_code=400, detail=f"Unknown plan: {plan_name}")
+
+    await upsert_worker(
+        phone=str(worker["phone"]),
+        name=worker_name,
+        platform_name=platform.display_name(),
+        zone_pincode=pincode,
+        zone_name=str(zone_data.get("name", zone_key)),
+        plan_name=selected.name,
+    )
+
+    refreshed = await get_worker(str(worker["phone"]))
+    if not refreshed:
+        raise HTTPException(status_code=500, detail="Failed to refresh worker profile")
+
+    settled_total = await total_settled_amount_for_phone(str(refreshed["phone"]))
+    out = WorkerOut(
+        name=refreshed["name"],
+        phone=refreshed["phone"],
+        platform=refreshed["platform_name"],
+        zone=refreshed["zone_name"],
+        zonePincode=refreshed["zone_pincode"],
+        plan=refreshed["plan_name"],
+        policyId=f"SR-{refreshed['zone_pincode'][-4:]}",
+        totalEarnings=round(settled_total),
+        earningsProtected=round(settled_total),
+    )
+    return ApiResponse(success=True, data=out, message="Worker profile updated")
 
 
 @router.post("/workers/location-signal", response_model=ApiResponse)

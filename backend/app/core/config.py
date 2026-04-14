@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, List
 
 from pydantic import field_validator
@@ -22,14 +21,14 @@ class Settings(BaseSettings):
     expose_debug_otp: bool = True
 
     supabase_db_url: str = ""
-    db_pool_min_size: int = 1
-    db_pool_max_size: int = 10
-    zone_data_path: str = ""
 
     # External API keys (optional; graceful fallback if missing)
     waqi_api_key: str = ""
     tomtom_api_key: str = ""
     news_api_key: str = ""
+
+    trigger_poll_minutes: int = 15
+    trigger_window_sample_slack: int = 1
 
     # Fraud scoring (Isolation Forest)
     fraud_scoring_enabled: bool = True
@@ -84,6 +83,22 @@ class Settings(BaseSettings):
     motion_validation_adjustment_cap: float = 0.10
     motion_signal_retention_days: int = 14
 
+    # Admin review surface
+    admin_token: str = "saatdin-admin-local"
+    admin_username: str = "admin"
+    admin_password: str = "saatdin-local"
+
+    # Payout sandbox / Razorpay
+    payout_provider_mode: str = "sandbox"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+
+    # Adversarial defense — claim velocity spike detection
+    claim_velocity_spike_threshold: int = 15
+    claim_velocity_spike_window_minutes: int = 10
+    # Adversarial defense — new account velocity hold
+    new_account_hold_days: int = 7
+
     cors_origins: List[str] = [
         "http://localhost",
         "http://localhost:3000",
@@ -127,6 +142,8 @@ class Settings(BaseSettings):
         "motion_min_window_seconds",
         "motion_min_sample_count",
         "motion_signal_retention_days",
+        "trigger_poll_minutes",
+        "trigger_window_sample_slack",
         mode="before",
     )
     @classmethod
@@ -158,13 +175,8 @@ class Settings(BaseSettings):
         return max(0.0, min(1.0, parsed))
 
     @property
-    def zone_file_path(self) -> Path:
-        if self.zone_data_path:
-            return Path(self.zone_data_path)
-        return Path(__file__).resolve().parents[3] / "assets" / "data" / "zone_risk_runtime.json"
-
-    @property
-    def fraud_model_file_path(self) -> Path:
+    def fraud_model_file_path(self):
+        from pathlib import Path
         if self.fraud_model_path:
             configured = Path(self.fraud_model_path)
             if configured.is_absolute():
@@ -174,9 +186,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        if not self.supabase_db_url.strip():
-            raise ValueError("SUPABASE_DB_URL is required. Example: postgresql://postgres:<password>@<host>:5432/postgres")
-        return self.supabase_db_url.strip()
+        return self.supabase_db_url
 
     @property
     def fraud_llm_provider_sequence(self) -> List[str]:
