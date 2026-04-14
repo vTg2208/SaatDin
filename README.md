@@ -7,41 +7,7 @@ Parametric income insurance for Q-commerce delivery riders in Bangalore — buil
 
 ---
 
-## 🟢 Implementation Status — Phase 2 Complete
-
-> Last updated: April 2026. Phase 2 delivered. Issues #8, #9, #18, and #19 resolved in the current sprint.
-
-| Feature / Module | Status | Notes |
-|---|---|---|
-| Worker onboarding (OTP + registration) | ✅ Implemented | Auth flow, zone + plan selection live |
-| ZAPE premium engine | ✅ Implemented | Zone risk multiplier, weekly recalc |
-| RainLock trigger | ✅ Implemented | Open-Meteo, 35mm/3hr threshold |
-| AQI Guard trigger | ✅ Implemented | WAQI API, AQI > 250 threshold |
-| TrafficBlock trigger | ✅ Implemented | TomTom API, < 5 kmph threshold |
-| ZoneLock trigger (auto) | ✅ Implemented | NewsAPI + keyword NLP |
-| **ZoneLock manual report UI** | ✅ Implemented | Full-screen form, loading/success/error states (Issue #8) |
-| Claims list + history | ✅ Implemented | Filterable by status, live from backend |
-| **Claim escalation UI** | ✅ Implemented | Reason selection, SLA messaging, success animation (Issue #9) |
-| HeatBlock trigger | ✅ Implemented | Open-Meteo, temp > 39°C + humidity > 70% |
-| Payout dashboard | ✅ Implemented | Monthly trends, UPI management, statement download |
-| GPS variance fraud detection | ✅ Implemented | Layer A rule engine |
-| Isolation Forest fraud model | 🔄 In progress | Issue #14 — training on synthetic data |
-| LLM fallback (Groq + Gemini) | 🔄 In progress | Issue #15 — LangGraph orchestration |
-| Razorpay sandbox payouts | 🔄 In progress | Issue #11 — sandbox integration |
-| Admin escalation dashboard | 🔄 In progress | Issue #13 — review queue UI |
-| External API key hardening | 🔄 In progress | Issue #12 — ENV management |
-| **Analyzer warning cleanup** | ✅ Implemented | Zero-warning baseline, CI guardrail added (Issue #19) |
-| **Documentation alignment** | ✅ Implemented | This status matrix (Issue #18) |
-| Accelerometer motion analysis | 📋 Planned | Phase 3 |
-| Cell tower triangulation | 📋 Planned | Phase 3 |
-| Temporal co-claim graph | 📋 Planned | Phase 3 |
-| Reinsurance-backed pandemic rider | 📋 Planned | Phase 3 |
-
-**Legend:** ✅ Implemented · 🔄 In progress · 📋 Planned
-
----
-
-
+## Table of Contents
 
 - [Problem](#problem)
 - [Solution](#solution)
@@ -54,8 +20,9 @@ Parametric income insurance for Q-commerce delivery riders in Bangalore — buil
 - [Fraud Detection](#fraud-detection)
 - [Adversarial Defense & Anti-Spoofing Strategy](#adversarial-defense--anti-spoofing-strategy)
 - [Manual Claim Escalation](#manual-claim-escalation)
+- [Local Development](#local-development)
 - [Tech Stack](#tech-stack)
-- [Roadmap](#roadmap)
+- [Delivery Status](#delivery-status)
 - [Team](#team)
 - [References](#references)
 
@@ -136,13 +103,13 @@ The following describes the end-to-end flow for Raju during a monsoon event on a
 
 5. **TriBrain evaluation:** The rule engine (Tier 1) evaluates the event. Confidence is 0.94 — above the 0.90 threshold. A claim is automatically created for Raju. No human involvement. Elapsed time: under 2 seconds.
 
-6. **Fraud check:** Layer A confirms Raju's last GPS ping (from the simulated platform API) is within 1.2 km of his Bellandur dark store. Layer B finds no anomalies in his claim history. Claim is cleared.
+6. **Fraud check:** SaatDin evaluates Raju's recent mobile location, GPS variance, and anomaly signals against his registered Bellandur zone. The claim clears without manual review.
 
-7. **Payout initiated:** ₹400 is dispatched to Raju's registered UPI ID via Razorpay. Elapsed time from trigger to payout initiation: under 10 seconds.
+7. **Payout initiated:** The payout is dispatched through the local payout sandbox. The backend exposes Razorpay-compatible provider hooks, and live Razorpay keys can be configured later without changing the mobile flow.
 
-8. **Notification delivered:** Raju receives a push notification: *"Heavy rain detected in Bellandur. ₹400 payout has been processed to your UPI ID. Stay safe."* Raju did not open the app. He did not file anything. The notification is informational — no action is required from him.
+8. **Status visible in app:** The payout and claim status become visible in the Flutter app immediately. Push notifications are follow-up work for hosted deployments.
 
-9. **End of day:** The claim is logged. Raju's disruption history is updated. ZAPE factors this event into next Sunday's premium recalculation.
+9. **End of day:** The claim is logged. Raju's disruption history is updated, and the same zone-risk inputs remain available for future pricing updates.
 
 ---
 
@@ -154,22 +121,22 @@ The following describes the end-to-end flow for Suresh during a severe traffic d
 
 3. **TriBrain evaluation:** The rule engine (Tier 1) evaluates the event. Confidence is 0.91. A claim is automatically created for Suresh. Elapsed time: under 2 seconds.
 
-4. **Fraud check:** Layer A confirms Suresh's last GPS ping is within the Whitefield zone. Layer B checks that his claim frequency and the zone's claim density are within normal bounds. Claim is cleared.
+4. **Fraud check:** SaatDin evaluates Suresh's recent mobile location, tower, and anomaly signals against the Whitefield zone. The claim clears without manual review.
 
-5. **Payout initiated:** 70% of Suresh's daily rate is dispatched to his UPI ID via Razorpay. TrafficBlock pays at 70% since partial deliveries may still be possible on alternate routes.
+5. **Payout initiated:** The payout is dispatched through the same sandbox payout rail. TrafficBlock pays at 70% since partial deliveries may still be possible on alternate routes.
 
-6. **Notification delivered:** Suresh receives a push notification: *"Severe congestion detected in Whitefield. ₹280 payout has been processed to your UPI ID."* No action required from him.
+6. **Status visible in app:** The payout and claim status become visible in the Flutter app immediately. Push notifications are follow-up work for hosted deployments.
 
-7. **End of day:** The claim is logged and ZAPE updates the traffic congestion score for pincode 560066 for next week's premium recalculation.
+7. **End of day:** The claim is logged and the zone's traffic score stays available for later repricing or analytics.
 
 ---
 
 ## Weekly Premium Model
 
-Premiums are structured on a **weekly basis** to align with the gig economy's typical payout cycle. Every Sunday night, ZAPE (Zone-Adaptive Pricing Engine) recalculates the upcoming week's premium for each worker.
+Premiums are structured on a **weekly basis** to align with the gig economy's typical payout cycle. In the current implementation, ZAPE (Zone-Adaptive Pricing Engine) calculates premiums when a worker registers, changes plan, or fetches policy details. The same pricing inputs are reused consistently across frontend and backend.
 
 ```
-Weekly Premium = Base Rate × Zone Risk Multiplier × Platform Factor × (1 − Loyalty Discount)
+Weekly Premium = Base Rate x Zone Risk Multiplier x Platform Factor
 ```
 
 **Base rate:** ₹45/week (design assumption — to be calibrated against real claims data)
@@ -182,7 +149,7 @@ Weekly Premium = Base Rate × Zone Risk Multiplier × Platform Factor × (1 − 
 - Blinkit / Zepto (10-minute delivery commitment, higher outdoor exposure): 1.1×
 - Swiggy Instamart (30-minute delivery): 1.0×
 
-**Loyalty Discount:** 5% per 4-week no-fraud streak, capped at 20%.
+**Loyalty Discount:** planned follow-up work. It is not applied in the local build yet, so the formula above reflects the current backend behavior.
 
 **Three coverage tiers:**
 
@@ -247,7 +214,7 @@ features = [
     'zone_flood_risk_score',         # derived from BBMP data, 0.0–1.0
     'zone_aqi_risk_score',           # derived from CPCB historical data
     'zone_traffic_congestion_score', # derived from TomTom historical average speed data per pincode
-    'worker_active_hours_per_week',  # from simulated platform API
+    'worker_active_hours_per_week',  # reserved input for future platform telemetry
     'platform_type',                 # 0 = Instamart, 1 = Blinkit/Zepto
     'season',                        # 0 = dry, 1 = pre-monsoon, 2 = monsoon
     'disruption_days_past_4_weeks'   # rolling count
@@ -266,7 +233,7 @@ features = [
 Three layers, each escalating in compute cost:
 
 **Layer A — GPS Validation (rule-based)**
-Worker's last known GPS coordinate (from simulated platform API) is checked against their registered dark store zone at claim time. Distance > 3km at the time of a parametric event flags the claim for review.
+Worker location signals collected from the Flutter app are checked against the registered delivery zone at claim time. GPS variance, jump ratio, and zone affinity feed directly into the fraud score.
 
 **Layer B — Isolation Forest (scikit-learn)**
 Detects statistical anomalies across: claim hour, API weather reading at claim time, zone claim density for the day, worker claim frequency over 30 days, GPS distance from store. Trained on synthetic normal and fraudulent claim profiles.
@@ -303,19 +270,17 @@ SaatDin models the fraud ring problem as a graph detection problem, not a single
 - **Temporal co-claim graph:** Workers who consistently trigger claims within minutes of each other across multiple independent events are modeled as a weighted graph. Nodes are workers; edges are co-claim events weighted by frequency and recency. Dense subgraphs — clusters of workers who always claim together — are surfaced on the admin dashboard as suspected rings.
 - **New account velocity:** Accounts created within 7 days of a red-alert event and immediately filing claims are held for manual review regardless of GPS data.
 
-### 3. UX Balance — Handling Flagged Claims Without Penalising Honest Workers
+### 3. Review Flow for Flagged Claims
 
-The core principle is: **no claim is auto-rejected. No genuine worker is left with zero.**
+The local build keeps flagged claims in an `in_review` state instead of auto-rejecting them.
 
-When a claim is flagged by any of the above signals, the following flow applies:
+1. **Auto-created or manual claim is stored:** Trigger or dispute data is recorded immediately with full anomaly features.
+2. **Fraud signals are attached:** GPS variance, motion quality, tower consistency, zone affinity, device fingerprint, and co-claim graph context are persisted on the claim.
+3. **Admin queue receives the case:** Flagged claims and manual escalations appear in the FastAPI admin dashboard for review.
+4. **Admin approves or rejects:** An approved claim is settled and routed into the payout sandbox. A rejected claim remains visible in claim history with its final status.
+5. **Operational follow-up:** Push notifications and partial-provisional payouts are follow-up roadmap items, not part of the current local build.
 
-1. **Immediate 60% payout:** Sixty percent of the daily rate is credited to the worker's UPI ID automatically, without waiting for review. A worker in a genuine flood is not left empty-handed while the system deliberates.
-2. **In-app notification (informational):** The worker receives a notification stating their claim is being verified and that a partial credit has been processed. The language is neutral — no accusatory framing. Example: *"Your RainLock claim is under review. ₹240 has been credited. ₹160 will follow once verification is complete."*
-3. **Auto-clear via zone consensus:** If three or more workers with a clean claim history of 8 or more weeks in the same zone have confirmed, uncontested claims for the same event, all provisional claims in that zone for that event are automatically cleared and the remaining 40% is released. No human review required.
-4. **Human review for unresolved cases:** Claims not resolved by zone consensus enter the admin review queue. Target SLA: 4 hours. The reviewer sees the full signal breakdown — GPS, motion data, cell tower match, zone affinity score, co-claim graph — in a single view.
-5. **Remaining 40% released** upon review clearance or auto-clear. Total elapsed time for a genuine worker in a clear-cut zone: under 4 hours from flagging to full payout.
-
-This approach ensures that the cost of a false positive — wrongly delaying a genuine worker's payout — is bounded and transparent, while the cost of a false negative — paying a fraudster — is limited to 60% of one daily rate before detection.
+This keeps the decision trail auditable while ensuring every flagged claim has a visible review path and no silent failure mode.
 
 ---
 
@@ -326,13 +291,50 @@ Parametric systems are not infallible. Sensor APIs can fail, data can be delayed
 **Escalation flow:**
 
 1. Worker taps "Raise a dispute" from the claims screen in the app.
-2. Worker selects the disruption type and provides a brief description. Photo or video evidence is optional but supported.
+2. Worker provides a brief text reason for the missed or disputed trigger. The current mobile flow captures structured text only.
 3. Submission is automatically cross-referenced against available API data for that pincode and time window.
 4. If API data supports the claim, payout is approved immediately and the system flags a false-negative for model improvement.
-5. If API data is inconclusive, the claim enters a human review queue on the admin dashboard. Target review SLA: 4 hours.
-6. Worker receives an in-app notification and payout once resolved.
+5. If API data is inconclusive, the claim enters a human review queue on the admin dashboard. Target review SLA in the current build: 2 hours.
+6. Worker sees the updated claim status in the app and receives payout once resolved.
 
 This ensures that a failed API or an unlisted disruption type does not leave a worker without recourse.
+
+---
+
+## Local Development
+
+SaatDin now runs locally in a **SQLite-first** configuration. No Supabase project is required for day-to-day development.
+
+1. Copy `backend/.env.example` to `backend/.env` if you want to override defaults.
+2. Install backend dependencies:
+
+```powershell
+python -m pip install -r backend/requirements.txt
+```
+
+3. Start the FastAPI backend:
+
+```powershell
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+4. Install Flutter packages and run the app from the repository root:
+
+```powershell
+flutter pub get
+flutter run
+```
+
+The worker app talks to `http://localhost:8000/api/v1`, and the admin dashboard is served from `http://127.0.0.1:8000/admin/dashboard`.
+Default admin credentials for local review are `admin` / `saatdin-local`.
+
+Optional migration or hosted deployment scripts can still target Supabase later, but they are no longer required for local setup.
+
+On Windows, you can also use a single helper command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+```
 
 ---
 
@@ -342,54 +344,39 @@ This ensures that a failed API or an unlisted disruption type does not leave a w
 |---|---|
 | Backend API | Python 3.11, FastAPI |
 | Agent orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) (open source) |
-| Database (dev) | SQLite |
-| Database (prod) | Supabase free tier |
+| Database (local dev) | SQLite |
+| Database (optional hosted target) | Supabase migration scripts |
 | Task scheduling | APScheduler |
-| ML models | scikit-learn, XGBoost |
-| NLP (ZoneLock) | spaCy |
+| ML models | scikit-learn |
+| NLP (ZoneLock) | Lightweight keyword + similarity classifier |
 | LLM — primary | Groq API, free tier (no credit card) |
 | LLM — fallback | Google AI Studio / Gemini 2.5 Flash, free tier (no credit card) |
 | Mobile app | Flutter (Android-first) |
-| Payment sandbox | Razorpay test mode |
+| Payment sandbox | Local Razorpay-compatible sandbox service |
+| Admin surface | FastAPI HTML dashboard |
 | Deployment | Railway free tier |
 | CI | GitHub Actions |
 
 **Why mobile and not web:**
-Q-commerce riders have no access to a desktop during their shift. Every interaction with SaatDin — checking coverage, receiving a payout notification, raising a dispute — happens between deliveries, on a bike, in under 30 seconds. A mobile app is the only viable form factor for this demographic. Flutter gives us a single codebase for Android and iOS, keeping Phase 2 scope manageable. Push notifications are central to the zero-touch experience — when a trigger fires, the worker is informed instantly without opening the app. Native mobile delivers significantly more reliable push notification handling on low-end Android devices than a PWA. Future scope includes surfacing payout status directly inside platform apps like Blinkit and Zepto through their rider-facing interfaces.
+Q-commerce riders have no access to a desktop during their shift. Every interaction with SaatDin — checking coverage, receiving a payout notification, raising a dispute — happens between deliveries, on a bike, in under 30 seconds. A mobile app is the only viable form factor for this demographic. Flutter gives us a single codebase for Android and iOS, keeping Phase 2 scope manageable. Push notifications are planned for hosted deployments, and the current local build keeps claim and payout status visible directly inside the app. Native mobile remains the right long-term fit for reliable background signal capture, permissions, and future notification delivery on low-end Android devices. Future scope includes surfacing payout status directly inside platform apps like Blinkit and Zepto through their rider-facing interfaces.
 
 ---
 
-## Roadmap
+## Delivery Status
 
-### Phase 1 — Ideation & Foundation (March 4–20)
-- Problem research and persona definition
-- Weekly premium model design (ZAPE)
-- Parametric trigger specification (including TrafficBlock)
-- TriBrain + LangGraph architecture design
-- Adversarial defense strategy
-- Tech stack selection
-- FastAPI project scaffold
-- Open-Meteo integration proof-of-concept
-- Pincode risk database (zone_risk.json)
+### Completed in the local build
+- Android-first Flutter client with onboarding, policy, claims, payout, and profile flows
+- FastAPI backend with OTP auth, worker registration, policy pricing, trigger monitoring, claims, escalations, payouts, and admin review
+- Sustained-window trigger logic for AQI Guard, TrafficBlock, and HeatBlock with persisted historical readings
+- ZoneLock manual reporting with auto-confirmation when corroborating worker reports arrive in the same zone
+- Fraud scoring with Isolation Forest, Groq/Gemini fallback review, GPS variance, motion, tower, zone affinity, device fingerprint, and co-claim graph signals
+- Local payout sandbox with UPI validation, transfer tracking, and statement generation
+- FastAPI admin dashboard for claims, escalations, fraud clusters, and payout activity
 
-### Phase 2 — Automation & Protection (March 21 – April 4)
-- Worker registration and onboarding flow (Flutter)
-- ZAPE premium engine (live calculation)
-- RainLock, AQI Guard, and TrafficBlock triggers (live APIs)
-- ZoneLock with manual verification flow
-- Claims management module
-- Manual escalation feature
-- GPS variance and zone affinity scoring
-- Device fingerprint clustering (fraud ring detection)
-
-### Phase 3 — Scale & Optimise (April 5–17)
-- Isolation Forest fraud model (trained)
-- Groq + Gemini fallback LLM integration via LangGraph
-- Accelerometer-based motion signature analysis
-- Cell tower cross-referencing
-- Temporal co-claim graph (ring detection)
-- Razorpay sandbox payouts
-- Admin analytics dashboard
+### Follow-up operational work
+- Configure live provider credentials for hosted SMS, Groq/Gemini, News, WAQI, TomTom, and Razorpay environments
+- Add push notifications and production-grade background delivery for mobile signals
+- Wire CI runners with Python and Flutter so the full backend and frontend test suite executes automatically on every change
 
 ---
 
@@ -408,3 +395,12 @@ Behind the scene workers.
 ---
 
 *Premium ranges, zone risk multipliers, and trigger thresholds are design decisions made for this prototype. They are not derived from actuarial data and will require calibration before any real-world deployment.*
+
+
+
+
+
+
+
+
+
