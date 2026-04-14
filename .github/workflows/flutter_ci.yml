@@ -1,4 +1,4 @@
-name: Flutter CI
+name: SaatDin CI
 
 on:
   push:
@@ -7,8 +7,31 @@ on:
     branches: [ main ]
 
 jobs:
-  analyze:
-    name: Dart Analyzer Guardrail
+  backend-tests:
+    name: Backend Tests (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        run: python -m pytest backend/tests/ -v --tb=short
+        env:
+          DATABASE_PATH: ":memory:"
+          JWT_SECRET: ci-test-secret
+          EXPOSE_DEBUG_OTP: "true"
+          FRAUD_SCORING_ENABLED: "false"
+
+  flutter-analyze:
+    name: Flutter Analyze
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +45,23 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # Issue #19 — zero-warning policy.
-      # Change --baseline N temporarily when intentionally deferring cleanup.
       - name: Run analyzer guardrail
         run: bash scripts/ci_analyze.sh --baseline 0
+
+  flutter-test:
+    name: Flutter Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run widget tests
+        run: flutter test --no-pub
