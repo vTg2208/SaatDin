@@ -8,7 +8,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBear
 from .config import settings
 from .db import apply_due_pending_worker_plan, get_worker
 from .phone import normalize_phone_number
-from .security import decode_access_token
+from .security import decode_access_token, verify_password
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/verify-otp")
 admin_basic = HTTPBasic(auto_error=False)
@@ -37,7 +37,7 @@ async def get_admin_actor(credentials: HTTPBasicCredentials | None = Depends(adm
             headers={"WWW-Authenticate": "Basic"},
         )
     username_ok = secrets.compare_digest(credentials.username, settings.admin_username)
-    password_ok = secrets.compare_digest(credentials.password, settings.admin_password)
+    password_ok = verify_password(credentials.password, settings.admin_password)
     if not (username_ok and password_ok):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

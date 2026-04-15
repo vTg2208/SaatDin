@@ -17,6 +17,7 @@ from ..core.db import (
     update_escalation_status,
 )
 from ..core.dependencies import get_admin_actor
+  from ..core.zone_cache import refresh_zone_cache
 from ..models.schemas import ApiResponse, ClaimReviewRequest
 from ..services.payouts import initiate_claim_payout, list_admin_payouts
 
@@ -256,6 +257,16 @@ async def admin_payouts(
     return ApiResponse(success=True, data=rows)
 
 
+@router.post("/cache/zones/refresh", response_model=ApiResponse)
+async def admin_refresh_zone_cache(_: str = Depends(get_admin_actor)) -> ApiResponse:
+  zone_map = await refresh_zone_cache()
+  return ApiResponse(
+    success=True,
+    data={"zoneCount": len(zone_map)},
+    message="Zone cache refreshed",
+  )
+
+
 @router.post("/claims/{claim_id}/review", response_model=ApiResponse)
 async def review_claim(
     claim_id: int,
@@ -277,11 +288,20 @@ async def review_claim(
         worker = await get_worker(str(claim["phone"]))
         transfer = None
         if worker is not None and updated is not None:
+          try:
             transfer = await initiate_claim_payout(
-                claim=updated,
-                worker=worker,
-                note=payload.reviewNotes or "Admin approved claim payout",
-                metadata={"reviewedBy": admin_actor},
+              claim=updated,
+              worker=worker,
+              note=payload.reviewNotes or "Admin approved claim payout",
+              metadata={"reviewedBy": admin_actor},
+            )
+          except ValueError as exc:
+            transfer = None
+            updated = await update_claim_status(
+              claim_id,
+              status="in_review",
+              review_notes=f"Payout blocked: {exc}",
+              reviewed_by=admin_actor,
             )
         if payload.escalationId:
             await update_escalation_status(payload.escalationId, "resolved", payload.reviewNotes)

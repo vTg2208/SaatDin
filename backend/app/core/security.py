@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import random
+import secrets
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -10,6 +12,9 @@ from fastapi import HTTPException, status
 from jwt import InvalidTokenError
 
 from .config import settings
+
+_PASSWORD_SCHEME = "pbkdf2_sha256"
+_PASSWORD_ITERATIONS = 210_000
 
 
 def generate_otp() -> str:
@@ -20,6 +25,31 @@ def hash_otp(phone: str, otp: str) -> str:
     message = f"{phone}:{otp}".encode("utf-8")
     key = settings.jwt_secret.encode("utf-8")
     return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def hash_password(password: str, *, iterations: int = _PASSWORD_ITERATIONS) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
+    salt_b64 = urlsafe_b64encode(salt).decode("ascii")
+    digest_b64 = urlsafe_b64encode(digest).decode("ascii")
+    return f"{_PASSWORD_SCHEME}${int(iterations)}${salt_b64}${digest_b64}"
+
+
+def verify_password(password: str, stored_value: str) -> bool:
+    stored = str(stored_value or "").strip()
+    parts = stored.split("$")
+    if len(parts) == 4 and parts[0] == _PASSWORD_SCHEME:
+        try:
+            iterations = int(parts[1])
+            salt = urlsafe_b64decode(parts[2].encode("ascii"))
+            expected = urlsafe_b64decode(parts[3].encode("ascii"))
+        except Exception:
+            return False
+        derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, max(1, iterations))
+        return hmac.compare_digest(derived, expected)
+
+    # Backward-compatible fallback for legacy plaintext admin password config.
+    return hmac.compare_digest(password, stored)
 
 
 def create_access_token(phone_number: str) -> str:
