@@ -45,21 +45,27 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     try {
       try {
         user = await _apiService.getProfile('me');
-      } catch (_) {
-        loadIssues.add('profile');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('profile');
+        }
       }
 
       try {
         policy = await _apiService.getPolicy('me');
-      } catch (_) {
-        loadIssues.add('policy');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('policy');
+        }
         policy = <String, dynamic>{};
       }
 
       try {
         claims = await _apiService.getClaims('me');
-      } catch (_) {
-        loadIssues.add('claims');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('claims');
+        }
         claims = const <Claim>[];
       }
 
@@ -95,6 +101,15 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
         });
       }
     }
+  }
+
+  bool _isAuthRelatedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('authentication required') ||
+        message.contains('not authenticated') ||
+        message.contains('unauthorized') ||
+        message.contains('token') ||
+        message.contains('worker not found for token subject');
   }
 
   Widget _buildTopUtilityButtons(User user) {

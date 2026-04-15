@@ -123,7 +123,23 @@ async def get_worker_status(current_phone: str = Depends(get_current_phone)) -> 
 
 
 @router.get("/workers/me", response_model=ApiResponse)
-async def get_my_worker(worker: dict = Depends(get_current_worker)) -> ApiResponse:
+async def get_my_worker(current_phone: str = Depends(get_current_phone)) -> ApiResponse:
+    worker = await get_worker(current_phone)
+    if not worker:
+        logger.warning("worker_profile_missing phone=%s", current_phone)
+        out = WorkerOut(
+            name="Worker",
+            phone=current_phone,
+            platform="Unknown",
+            zone="Unknown",
+            zonePincode="",
+            plan="Basic",
+            policyId=_safe_policy_id(""),
+            totalEarnings=0,
+            earningsProtected=0,
+        )
+        return ApiResponse(success=True, data=out, message="Worker profile missing; fallback profile returned")
+
     phone = str(worker.get("phone") or "")
     zone_pincode = str(worker.get("zone_pincode") or "")
     logger.info("worker_profile_requested phone=%s", phone)

@@ -88,7 +88,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
     try {
       final user = await _apiService.getProfile('me');
       final policy = await _apiService.getPolicy('me');
-      final plans = await _apiService.getPlans(zone: user.zone, platform: user.platform);
+      final planZone = user.zonePincode.trim().isNotEmpty ? user.zonePincode : user.zone;
+      final plans = await _apiService.getPlans(zone: planZone, platform: user.platform);
       final claims = await _apiService.getClaims('me');
 
       final activePlanName = _coerceString(policy['plan'], fallback: user.plan);
@@ -136,11 +137,13 @@ class _CoverageScreenState extends State<CoverageScreen> {
         _selectedTierIndex = currentIndex;
         _simulatorIndex = currentIndex;
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not refresh coverage details.')),
-        );
+        if (!_isAuthRelatedError(error)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not refresh coverage details.')),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -149,6 +152,15 @@ class _CoverageScreenState extends State<CoverageScreen> {
         });
       }
     }
+  }
+
+  bool _isAuthRelatedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('authentication required') ||
+        message.contains('not authenticated') ||
+        message.contains('unauthorized') ||
+        message.contains('token') ||
+        message.contains('worker not found for token subject');
   }
 
   @override

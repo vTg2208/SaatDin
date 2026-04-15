@@ -47,8 +47,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
     try {
       user = await _apiService.getProfile('me');
-    } catch (_) {
-      loadIssues.add('profile');
+    } catch (error) {
+      if (!_isAuthRelatedError(error)) {
+        loadIssues.add('profile');
+      }
       try {
         final status = await _apiService.getWorkerStatus();
         user = status.worker ?? User.empty(phone: status.phone);
@@ -59,15 +61,19 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
     try {
       policy = await _apiService.getPolicy('me');
-    } catch (_) {
-      loadIssues.add('policy');
+    } catch (error) {
+      if (!_isAuthRelatedError(error)) {
+        loadIssues.add('policy');
+      }
       policy = <String, dynamic>{};
     }
 
     try {
       dashboard = await _apiService.getPayoutDashboard();
-    } catch (_) {
-      loadIssues.add('payouts');
+    } catch (error) {
+      if (!_isAuthRelatedError(error)) {
+        loadIssues.add('payouts');
+      }
       dashboard = <String, dynamic>{};
     }
 
@@ -121,6 +127,15 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         ),
       );
     }
+  }
+
+  bool _isAuthRelatedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('authentication required') ||
+        message.contains('not authenticated') ||
+        message.contains('unauthorized') ||
+        message.contains('token') ||
+        message.contains('worker not found for token subject');
   }
 
   Future<void> _refreshPayouts() => _loadPayoutData();
