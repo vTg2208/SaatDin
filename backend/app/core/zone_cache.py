@@ -25,7 +25,9 @@ async def refresh_zone_cache() -> Dict[str, Dict[str, Any]]:
             continue
         zone_map[pincode] = zone_json
     if not zone_map:
-        raise RuntimeError("zone_risk table has no usable rows")
+        raise RuntimeError(
+            "zone_risk table has no usable rows. Run DB migrations and seed zone_risk data before startup."
+        )
 
     _ZONE_MAP = zone_map
     _ZONE_NAME_INDEX = {

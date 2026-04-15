@@ -112,8 +112,13 @@ def initialize_fraud_model() -> None:
     model_path = settings.fraud_model_file_path
     if not model_path.exists():
         _model = None
-        _model_version = "missing-artifact"
-        logger.warning("fraud_model_unavailable reason=artifact_missing path=%s", model_path)
+        _model_version = "missing-artifact:fail-open"
+        logger.error(
+            "fraud_model_missing path=%s configured_path=%s fail_open=%s",
+            model_path,
+            settings.fraud_model_path or "<default>",
+            bool(settings.fraud_fail_open),
+        )
         return
 
     try:

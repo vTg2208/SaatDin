@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Ambiguous-case LLM fallback (LangGraph + provider failover)
     fraud_llm_fallback_enabled: bool = True
-    fraud_llm_ambiguity_margin: float = 0.02
+    fraud_llm_ambiguity_margin: float = 0.07
     fraud_llm_trigger_confidence_min: float = 0.35
     fraud_llm_trigger_confidence_max: float = 0.75
     fraud_llm_provider_order: str = "groq,gemini"
@@ -177,12 +177,35 @@ class Settings(BaseSettings):
     @property
     def fraud_model_file_path(self):
         from pathlib import Path
+
         if self.fraud_model_path:
             configured = Path(self.fraud_model_path)
             if configured.is_absolute():
                 return configured
-            return Path(__file__).resolve().parents[3] / configured
-        return Path(__file__).resolve().parents[2] / "models" / "fraud" / "fraud_iforest_latest.joblib"
+
+            project_root = Path(__file__).resolve().parents[3]
+            backend_root = Path(__file__).resolve().parents[2]
+            candidates = [
+                project_root / configured,
+                backend_root / configured,
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    return candidate
+            return candidates[0]
+
+        project_root = Path(__file__).resolve().parents[3]
+        backend_root = Path(__file__).resolve().parents[2]
+        candidates = [
+            backend_root / "models" / "fraud" / "fraud_iforest_latest.joblib",
+            backend_root / "models" / "fraud" / "fraud_iforest_v1.joblib",
+            project_root / "backend" / "models" / "fraud" / "fraud_iforest_latest.joblib",
+            project_root / "backend" / "models" / "fraud" / "fraud_iforest_v1.joblib",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
 
     @property
     def database_url(self) -> str:
