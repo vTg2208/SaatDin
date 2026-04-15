@@ -107,7 +107,7 @@ class Claim {
       case ClaimStatus.escalated:
         return const Color(0xFF7C3AED);
       case ClaimStatus.settled:
-        return const Color(0xFF13B8AA);
+        return const Color(0xFF14B890);
       case ClaimStatus.rejected:
         return const Color(0xFFEF4444);
     }

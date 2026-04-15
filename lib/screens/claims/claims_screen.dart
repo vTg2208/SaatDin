@@ -71,11 +71,18 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
       });
 
       if (loadIssues.isNotEmpty) {
+        final issueText = switch (loadIssues.first) {
+          'profile' => 'Could not load profile details.',
+          'policy' => 'Could not load policy details.',
+          'claims' => 'Could not load claim history.',
+          _ => 'Could not refresh claim details.',
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               loadIssues.length == 1
-                  ? 'Failed to load ${loadIssues.first} from backend.'
+                  ? issueText
                   : 'Some claim details could not be refreshed.',
             ),
           ),

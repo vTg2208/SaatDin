@@ -16,7 +16,7 @@ class PayoutsScreen extends StatefulWidget {
 
 class _PayoutsScreenState extends State<PayoutsScreen> {
   final ApiService _apiService = ApiService();
-  final NumberFormat _currencyFormat = NumberFormat('#,##0');
+  final NumberFormat _currencyFormat = NumberFormat.decimalPattern('en_IN');
   final DateFormat _dateFormat = DateFormat('d MMM yyyy');
   final DateFormat _monthFormat = DateFormat('MMMM yyyy');
 
@@ -104,11 +104,18 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     });
 
     if (loadIssues.isNotEmpty && mounted) {
+      final issueText = switch (loadIssues.first) {
+        'profile' => 'Could not load profile details.',
+        'policy' => 'Could not load policy details.',
+        'payouts' => 'Could not refresh payout details.',
+        _ => 'Could not refresh payout details.',
+      };
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             loadIssues.length == 1
-                ? 'Failed to load ${loadIssues.first} from backend.'
+                ? issueText
                 : 'Some payout details could not be refreshed.',
           ),
         ),
@@ -439,9 +446,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
         ),
         child: Icon(icon, size: 18, color: AppColors.textPrimary),
       ),
