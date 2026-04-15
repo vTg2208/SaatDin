@@ -1,70 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/app_colors.dart';
 import '../../routes/app_routes.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide data model
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _OnboardingSlide {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String headline;
-  final String subheadline;
-  final String body;
-
-  const _OnboardingSlide({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.headline,
-    required this.subheadline,
-    required this.body,
-  });
-}
-
-const List<_OnboardingSlide> _slides = [
-  _OnboardingSlide(
-    icon: Icons.electric_bolt_rounded,
-    iconColor: Color(0xFF13B8AA),
-    iconBg: Color(0xFFE6F8F6),
-    headline: 'Zero-Touch Payouts',
-    subheadline: 'No forms. No calls. No waiting.',
-    body:
-        'When heavy rain, floods, or severe traffic shut down your delivery zone, '
-        'SaatDin detects it automatically and sends money straight to your UPI — '
-        'usually before you even reach home.',
-  ),
-  _OnboardingSlide(
-    icon: Icons.my_location_rounded,
-    iconColor: Color(0xFF0E8D83),
-    iconBg: Color(0xFFD1FAE5),
-    headline: 'Pincode-Precise Coverage',
-    subheadline: 'Your zone. Your payout.',
-    body:
-        'Disruptions are tracked at the pincode level. A flood in Bellandur '
-        "doesn't trigger a payout for a rider in Whitefield. "
-        'Coverage is always relevant to exactly where you work.',
-  ),
-  _OnboardingSlide(
-    icon: Icons.currency_rupee_rounded,
-    iconColor: Color(0xFFF59E0B),
-    iconBg: Color(0xFFFEF3C7),
-    headline: 'Weekly Premium, Big Safety Net',
-    subheadline: 'From ₹29 / week.',
-    body:
-        'Pay a small weekly premium — auto-debited every Monday via UPI. '
-        'Get up to ₹500 back for every qualifying disruption day. '
-        'Cancel anytime, no lock-in.',
-  ),
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main widget
-// ─────────────────────────────────────────────────────────────────────────────
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -73,359 +9,414 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
-    with TickerProviderStateMixin {
-  final PageController _pageController = PageController();
+class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
 
-  // Per-page animation controllers
-  late final List<AnimationController> _slideControllers;
-  late final List<Animation<double>> _fadeAnims;
-  late final List<Animation<Offset>> _slideAnims;
+  static const List<_OnboardingSlide> _slides = [
+    _OnboardingSlide(
+      titleLine1: 'Get Paid',
+      titleLine2: 'Instantly',
+      titleLine3: 'Automatically',
+      description:
+          'When floods or traffic block your zone, SaatDin detects it and sends money straight to your UPI - no forms, no calls.',
+      imagePath: 'assets/images/onboarding-screens/onboarding_screen.png',
+      feature1: 'Real-time weather & traffic detection',
+      feature2: 'Direct credit to your UPI account',
+      feature3: 'Zero paperwork, ever',
+    ),
+    _OnboardingSlide(
+      titleLine1: 'Only Your',
+      titleLine2: 'Area',
+      titleLine3: 'Matters',
+      description:
+          'Fair payouts. No confusion. We track disruptions based on your exact work area. If your zone is affected, you get paid. If it\'s not, it doesn\'t trigger — simple and fair.',
+      imagePath: 'assets/images/onboarding-screens/onboarding_screen2.png',
+      feature1: 'Track disruptions by location',
+      feature2: 'Fair zone-based payouts',
+      feature3: 'No false triggers',
+    ),
+    _OnboardingSlide(
+      titleLine1: 'Small Weekly',
+      titleLine2: 'Cost',
+      titleLine3: 'Solid Backup',
+      description:
+          'Starts from ₹29/week, auto-debited from UPI. If your work stops due to real disruptions, you still get money for that day — no chasing, no stress.',
+      imagePath: 'assets/images/onboarding-screens/onboarding_screen3.png',
+      feature1: 'Starting at just ₹29/week from UPI',
+      feature2: 'Automatic disbursement',
+      feature3: 'Zero stress payouts',
+    ),
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
-
-    _slideControllers = List.generate(
-      _slides.length,
-      (_) => AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 500),
-      ),
-    );
-
-    _fadeAnims = _slideControllers
-        .map((c) => CurvedAnimation(parent: c, curve: Curves.easeOut))
-        .toList();
-
-    _slideAnims = _slideControllers
-        .map(
-          (c) => Tween<Offset>(
-            begin: const Offset(0, 0.12),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: c, curve: Curves.easeOut)),
-        )
-        .toList();
-
-    // Animate first slide in immediately
-    _slideControllers[0].forward();
-  }
-
-  @override
-  void dispose() {
-    for (final c in _slideControllers) {
-      c.dispose();
-    }
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _onPageChanged(int page) {
-    setState(() => _currentPage = page);
-    _slideControllers[page].forward(from: 0);
-  }
-
-  void _goToPrev() {
-    if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
-  void _goToNext() {
-    if (_currentPage < _slides.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      _finishOnboarding();
-    }
-  }
-
-  void _finishOnboarding() {
+  void _finishOnboarding(BuildContext context) {
     Navigator.pushReplacementNamed(context, AppRoutes.bootstrap);
   }
 
-  // ─── Build ──────────────────────────────────────────────────────────────────
+  void _onNextPressed(BuildContext context) {
+    if (_currentPage < _slides.length - 1) {
+      setState(() {
+        _currentPage += 1;
+      });
+      return;
+    }
+    _finishOnboarding(context);
+  }
+
+  void _onPrevPressed() {
+    if (_currentPage > 0) {
+      setState(() {
+        _currentPage -= 1;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final slide = _slides[_currentPage];
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top navigation row: Back (left) + Skip (right) ──────────
-            Padding(
-              padding: const EdgeInsets.only(top: 12, left: 20, right: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Back button – hidden on first slide
-                  AnimatedOpacity(
-                    opacity: _currentPage > 0 ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    child: GestureDetector(
-                      onTap: _currentPage > 0 ? _goToPrev : null,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.border,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.chevron_left_rounded,
-                          color: AppColors.textPrimary,
-                          size: 26,
-                        ),
-                      ),
-                    ),
-                  ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final h = constraints.maxHeight;
+            final scale = (h / 860).clamp(0.82, 1.0);
 
-                  // Skip button – hidden on last slide
-                  AnimatedOpacity(
-                    opacity: _currentPage < _slides.length - 1 ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    child: GestureDetector(
-                      onTap: _finishOnboarding,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Skip',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Slide pages ─────────────────────────────────────────────
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _slides.length,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return FadeTransition(
-                    opacity: _fadeAnims[index],
-                    child: SlideTransition(
-                      position: _slideAnims[index],
-                      child: _SlideContent(slide: slide),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // ── Bottom area: dots + CTA button ──────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
+            return Padding(
+              padding: EdgeInsets.fromLTRB(22, 28 * scale, 22, 22 * scale),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Progress dots
+                  // Top header with page dots and skip button
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_slides.length, (i) {
-                      final isActive = i == _currentPage;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: isActive ? 28 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? AppColors.primary
-                              : AppColors.border,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    }),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Next / Get Started button
-                  SizedBox(
-                    width: double.infinity,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        color: AppColors.primary,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Page dots
+                      Row(
+                        children: [
+                          for (int i = 0; i < _slides.length; i++) ...[
+                            Container(
+                              width: (_currentPage == i ? 20 : 6) * scale,
+                              height: 5 * scale,
+                              decoration: BoxDecoration(
+                                color: _currentPage == i
+                                    ? const Color(0xFF14B890)
+                                    : const Color(0xFFD0D5DD),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                            if (i != _slides.length - 1)
+                              SizedBox(width: 6 * scale),
+                          ],
                         ],
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          onTap: _goToNext,
-                          borderRadius: BorderRadius.circular(14),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            child: Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    _currentPage == _slides.length - 1
-                                        ? 'Get Started'
-                                        : 'Next',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Icon(
-                                    Icons.arrow_forward_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ],
+                      if (_currentPage < _slides.length - 1)
+                        GestureDetector(
+                          onTap: () => _finishOnboarding(context),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 14 * scale,
+                              vertical: 7 * scale,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12 * scale),
+                              border:
+                                  Border.all(color: const Color(0xFFE9ECEF)),
+                            ),
+                            child: Text(
+                              'Skip',
+                              style: GoogleFonts.inter(
+                                fontSize: 13 * scale,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF4F5660),
                               ),
                             ),
                           ),
                         ),
+                    ],
+                  ),
+
+                  SizedBox(height: 50 * scale),
+
+                  // Heading
+                  Align(
+                    alignment: Alignment.center,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          slide.titleLine1,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 42 * scale,
+                            fontWeight: FontWeight.w500,
+                            height: 1.0,
+                            letterSpacing: -1.2,
+                            color: const Color(0xFF171717),
+                          ),
+                        ),
+                        Text(
+                          slide.titleLine2,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.pacifico(
+                            fontSize: 52 * scale,
+                            fontWeight: FontWeight.w400,
+                            height: 1.05,
+                            color: const Color(0xFF14B890),
+                          ),
+                        ),
+                        SizedBox(height: 10 * scale),
+                        Text(
+                          slide.titleLine3,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 42 * scale,
+                            fontWeight: FontWeight.w500,
+                            height: 1.0,
+                            letterSpacing: -1.2,
+                            color: const Color(0xFF171717),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 16 * scale),
+
+                  // Illustration area
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20 * scale),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18 * scale),
+                      child: SizedBox(
+                        height: 300 * scale,
+                        width: double.infinity,
+                        child: Image.asset(
+                          slide.imagePath,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              alignment: Alignment.center,
+                              color: Colors.white,
+                              child: Text(
+                                'Image not found',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14 * scale,
+                                  color: const Color(0xFF5C6169),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
+
+                  SizedBox(height: 16 * scale),
+
+                  // Description
+                  Text(
+                    slide.description,
+                    style: GoogleFonts.inter(
+                      fontSize: 13 * scale,
+                      fontWeight: FontWeight.w400,
+                      height: 1.55,
+                      color: const Color(0xFF5C6169),
+                    ),
+                  ),
+
+                  SizedBox(height: 20 * scale),
+
+                  // Feature rows
+                  _FeatureRow(
+                    icon: Icons.access_time_rounded,
+                    label: slide.feature1,
+                    scale: scale,
+                  ),
+                  SizedBox(height: 13 * scale),
+                  _FeatureRow(
+                    icon: Icons.credit_card_rounded,
+                    label: slide.feature2,
+                    scale: scale,
+                  ),
+                  SizedBox(height: 13 * scale),
+                  _FeatureRow(
+                    icon: Icons.star_border_rounded,
+                    label: slide.feature3,
+                    scale: scale,
+                  ),
+
+                  const Spacer(),
+
+                  if (_currentPage == _slides.length - 1)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _finishOnboarding(context),
+                          child: Container(
+                            width: double.infinity,
+                            constraints: BoxConstraints(maxWidth: 320 * scale),
+                            padding: EdgeInsets.symmetric(
+                              vertical: 16 * scale,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF14B890),
+                              borderRadius: BorderRadius.circular(18 * scale),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF14B890)
+                                      .withOpacity(0.28),
+                                  blurRadius: 18 * scale,
+                                  offset: Offset(0, 8 * scale),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Get Started',
+                              style: GoogleFonts.inter(
+                                fontSize: 16 * scale,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Left arrow button
+                        GestureDetector(
+                          onTap: _onPrevPressed,
+                          child: Container(
+                            width: 54 * scale,
+                            height: 54 * scale,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _currentPage > 0
+                                  ? const Color(0xFF14B890)
+                                  : const Color(0xFFD0D5DD),
+                              boxShadow: _currentPage > 0
+                                  ? [
+                                      BoxShadow(
+                                        color: const Color(0xFF14B890)
+                                            .withOpacity(0.35),
+                                        blurRadius: 18 * scale,
+                                        offset: Offset(0, 6 * scale),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: const Icon(
+                              Icons.chevron_left_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        // Right arrow button
+                        GestureDetector(
+                          onTap: () => _onNextPressed(context),
+                          child: Container(
+                            width: 54 * scale,
+                            height: 54 * scale,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF14B890),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF14B890)
+                                      .withOpacity(0.35),
+                                  blurRadius: 18 * scale,
+                                  offset: Offset(0, 6 * scale),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide content widget
-// ─────────────────────────────────────────────────────────────────────────────
+class _OnboardingSlide {
+  final String titleLine1;
+  final String titleLine2;
+  final String titleLine3;
+  final String description;
+  final String imagePath;
+  final String feature1;
+  final String feature2;
+  final String feature3;
 
-class _SlideContent extends StatelessWidget {
-  final _OnboardingSlide slide;
+  const _OnboardingSlide({
+    required this.titleLine1,
+    required this.titleLine2,
+    required this.titleLine3,
+    required this.description,
+    required this.imagePath,
+    required this.feature1,
+    required this.feature2,
+    required this.feature3,
+  });
+}
 
-  const _SlideContent({required this.slide});
+class _FeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final double scale;
+
+  const _FeatureRow({
+    required this.icon,
+    required this.label,
+    required this.scale,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final contentHeight = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : MediaQuery.sizeOf(context).height;
-          return Column(
-            children: [
-              SizedBox(height: contentHeight * 0.05),
-
-              // ── Illustration card ──────────────────────────────────────
-              Container(
-                width: double.infinity,
-                height: contentHeight * 0.34,
-                decoration: BoxDecoration(
-                  color: slide.iconBg,
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Halo circle behind icon
-                    Container(
-                      width: 130,
-                      height: 130,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: slide.iconColor.withValues(alpha: 0.12),
-                      ),
-                    ),
-                    Icon(slide.icon, size: 80, color: slide.iconColor),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: contentHeight * 0.045),
-
-              // ── Headline ───────────────────────────────────────────────
-              Text(
-                slide.headline,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.montserrat(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  letterSpacing: -0.5,
-                  height: 1.2,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // ── Subheadline ────────────────────────────────────────────
-              Text(
-                slide.subheadline,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: slide.iconColor,
-                  letterSpacing: 0.2,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── Body copy ──────────────────────────────────────────────
-              Text(
-                slide.body,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                  height: 1.55,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 32 * scale,
+          height: 32 * scale,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFF14B890), width: 1.5),
+          ),
+          child: Icon(icon, color: const Color(0xFF14B890), size: 16 * scale),
+        ),
+        SizedBox(width: 12 * scale),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13 * scale,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF171717),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
