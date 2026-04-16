@@ -466,6 +466,50 @@ class ApiService {
     }
   }
 
+  /// POST /policy/premium-payment
+  Future<Map<String, dynamic>> recordPremiumPayment({
+    required double amount,
+    String status = 'paid',
+    String? weekStartDate,
+    String? providerRef,
+    Map<String, dynamic>? metadata,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/policy/premium-payment');
+      final payload = <String, dynamic>{
+        'amount': amount,
+        'status': status,
+        if (weekStartDate != null && weekStartDate.trim().isNotEmpty)
+          'weekStartDate': weekStartDate.trim(),
+        if (providerRef != null && providerRef.trim().isNotEmpty)
+          'providerRef': providerRef.trim(),
+        if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
+      };
+
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(authorized: true),
+            body: jsonEncode(payload),
+          )
+          .timeout(_timeout);
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final result = _extractData(body) as Map<String, dynamic>?;
+        if (result != null) return result;
+      }
+      throw Exception(_messageFromBody(body, fallback: 'Failed to record premium payment.'));
+    } catch (_) {
+      rethrow;
+    }
+  }
+
   // ── Claims ────────────────────────────────────────
 
   String _claimTypeToApi(ClaimType type) {

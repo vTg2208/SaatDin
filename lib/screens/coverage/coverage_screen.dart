@@ -374,8 +374,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
                               SnackBar(
                                 content: Text(
                                   pendingEffectiveDate == null
-                                      ? '${selectedPlan.name} plan will apply next week.'
-                                      : '${selectedPlan.name} plan will apply from $pendingEffectiveDate.',
+                                      ? '${selectedPlan.name} plan will start with the next weekly cycle.'
+                                      : '${selectedPlan.name} plan starts on $pendingEffectiveDate.',
                                 ),
                               ),
                             );

@@ -57,6 +57,14 @@ class HomeScreen extends StatelessWidget {
       policy['cycleEndDate'],
       fallback: nextBillingDate,
     );
+    final backendStatus = _coerceText(policy['status'], fallback: '').toLowerCase();
+    final pendingEffectiveDate = _coerceText(policy['pendingEffectiveDate']);
+    final policyStatus = _coerceText(policy['status'], fallback: 'inactive').toLowerCase();
+    final inferredScheduled = pendingEffectiveDate.isNotEmpty &&
+      DateTime.tryParse(pendingEffectiveDate)?.toUtc().isAfter(DateTime.now().toUtc()) == true;
+    final isScheduled = backendStatus.isEmpty
+      ? inferredScheduled
+      : backendStatus != 'active';
     final daysLeft = (policy['daysLeft'] as num?)?.toInt();
     final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num?)?.toDouble();
 
@@ -120,6 +128,9 @@ class HomeScreen extends StatelessWidget {
       coveredDaysLeft: coveredDaysLeft,
       cycleStartDate: cycleStartDate,
       cycleEndDate: cycleEndDate,
+      pendingEffectiveDate: pendingEffectiveDate,
+      isScheduled: isScheduled,
+      policyStatus: policyStatus,
       zoneLabel: policyZone,
       platformLabel: policyPlatform,
       claimsProcessedThisWeek: claimsProcessedThisWeek,
@@ -329,9 +340,14 @@ class HomeScreen extends StatelessWidget {
                     activePlan,
                     data.cycleStartDate,
                     data.cycleEndDate,
+                    isScheduled: data.isScheduled,
                     zoneLabel: data.zoneLabel,
                     platformLabel: data.platformLabel,
                   ),
+                  if (data.policyStatus == 'inactive') ...[
+                    const SizedBox(height: 10),
+                    _buildPaymentDuePrompt(context),
+                  ],
                   const SizedBox(height: 14),
                   _buildTodaysUpdatesSnapshot(data.latestClaim),
                   const SizedBox(height: 24),
@@ -362,6 +378,9 @@ class HomeScreen extends StatelessWidget {
     InsurancePlan activePlan,
     String cycleStartDate,
     String cycleEndDate,
+    {
+    required bool isScheduled,
+  }
   ) {
     return SafeArea(
       child: Padding(
@@ -377,6 +396,7 @@ class HomeScreen extends StatelessWidget {
               activePlan,
               cycleStartDate,
               cycleEndDate,
+              isScheduled: isScheduled,
               zoneLabel: _coerceText(user.zone),
               platformLabel: _coerceText(user.platform),
             ),
@@ -661,6 +681,7 @@ class HomeScreen extends StatelessWidget {
     String cycleStartDate,
     String cycleEndDate,
     {
+    required bool isScheduled,
     required String zoneLabel,
     required String platformLabel,
   }
@@ -698,7 +719,7 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "Active" badge – top right with a pulsing green dot.
+          // Status badge – active when live, scheduled when the next cycle is pending.
           Align(
             alignment: Alignment.centerRight,
             child: Container(
@@ -716,14 +737,14 @@ class HomeScreen extends StatelessWidget {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF6EFFC2),
+                    decoration: BoxDecoration(
+                      color: isScheduled ? AppColors.error : const Color(0xFF6EFFC2),
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 5),
-                  const Text(
-                    'Active',
+                  Text(
+                    isScheduled ? 'Inactive' : 'Active',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -737,7 +758,7 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Current plan',
+            isScheduled ? 'Scheduled plan' : 'Current plan',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -754,6 +775,16 @@ class HomeScreen extends StatelessWidget {
               color: Colors.white,
               letterSpacing: -1.0,
               height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isScheduled ? 'Coverage starts with the next weekly cycle.' : 'Coverage is live for the current weekly cycle.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w500,
+              height: 1.2,
             ),
           ),
           const SizedBox(height: 14),
@@ -863,6 +894,45 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentDuePrompt(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.payment_rounded, color: AppColors.warning, size: 20),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Payment due for the upcoming weekly cycle. Complete payment to activate cover.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const CoverageStatusScreen(),
+                ),
+              );
+            },
+            child: const Text('Details'),
           ),
         ],
       ),
@@ -2181,6 +2251,9 @@ class _HomeViewData {
     required this.coveredDaysLeft,
     required this.cycleStartDate,
     required this.cycleEndDate,
+    required this.pendingEffectiveDate,
+    required this.isScheduled,
+    required this.policyStatus,
     required this.zoneLabel,
     required this.platformLabel,
     required this.claimsProcessedThisWeek,
@@ -2197,6 +2270,9 @@ class _HomeViewData {
   final int coveredDaysLeft;
   final String cycleStartDate;
   final String cycleEndDate;
+  final String pendingEffectiveDate;
+  final bool isScheduled;
+  final String policyStatus;
   final String zoneLabel;
   final String platformLabel;
   final int claimsProcessedThisWeek;

@@ -29,6 +29,8 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
   String _cycleStartDate = '';
   String _cycleEndDate = '';
   String _paidOnDate = '';
+  String _pendingEffectiveDate = '';
+  String _policyStatus = 'inactive';
   int _daysLeft = 0;
   double _amountPaidThisWeek = 0;
   String _paidVia = '';
@@ -73,6 +75,8 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
     final cycleStartDate = _coerceString(policy['cycleStartDate']);
     final cycleEndDate = _coerceString(policy['cycleEndDate'], fallback: _coerceString(policy['nextBillingDate']));
     final paidOnDate = _coerceString(policy['paidOnDate'], fallback: cycleStartDate);
+    final pendingEffectiveDate = _coerceString(policy['pendingEffectiveDate']);
+    final policyStatus = _coerceString(policy['status'], fallback: '').toLowerCase();
     final daysLeft = (policy['daysLeft'] as num? ?? 0).toInt();
     final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num? ?? policy['weeklyPremium'] as num? ?? 0).toDouble();
 
@@ -91,6 +95,8 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
       _cycleStartDate = cycleStartDate;
       _cycleEndDate = cycleEndDate;
       _paidOnDate = paidOnDate;
+      _pendingEffectiveDate = pendingEffectiveDate;
+      _policyStatus = policyStatus;
       _daysLeft = daysLeft;
       _amountPaidThisWeek = amountPaidThisWeek;
       _paidVia = paidVia;
@@ -130,6 +136,12 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final inferredScheduled = _pendingEffectiveDate.isNotEmpty &&
+      DateTime.tryParse(_pendingEffectiveDate)?.toUtc().isAfter(DateTime.now().toUtc()) == true;
+    final isScheduled = _policyStatus.isEmpty
+      ? inferredScheduled
+      : _policyStatus != 'active';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4ED),
       body: SafeArea(
@@ -173,10 +185,10 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    const Text(
-                      "You're covered!",
+                    Text(
+                      isScheduled ? 'Your cover is inactive!' : "You're covered!",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
@@ -186,7 +198,9 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '₹${_amountPaidThisWeek.toInt()} debited. ${_activePlan.name} plan active from\ntoday.',
+                      isScheduled
+                          ? '₹${_amountPaidThisWeek.toInt()} debited. ${_activePlan.name} starts on\n${_dateLabel(_cycleStartDate)}.'
+                          : '₹${_amountPaidThisWeek.toInt()} debited. ${_activePlan.name} plan active for\nthis weekly cycle.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 14,

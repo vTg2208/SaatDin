@@ -5,6 +5,7 @@ import '../../services/api_service.dart';
 import '../../widgets/plan_card.dart';
 import '../../widgets/progress_dots.dart';
 import '../../routes/app_routes.dart';
+import 'payment/payment_flow_arguments.dart';
 
 class PlanSelectionScreen extends StatefulWidget {
   const PlanSelectionScreen({super.key});
@@ -17,7 +18,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
   final ApiService _apiService = ApiService();
 
   int _selectedIndex = 1; // Default to Standard (most popular)
-  bool _isActivating = false;
+  bool _isProceeding = false;
 
   Future<bool> _confirmOverwriteIfNeeded() async {
     final status = await _apiService.getWorkerStatus();
@@ -197,7 +198,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: plans.isEmpty || _isActivating
+                            onPressed: plans.isEmpty || _isProceeding
                                 ? null
                                 : () async {
                                     if (phone.isEmpty) {
@@ -210,48 +211,35 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                     }
 
                                     setState(() {
-                                      _isActivating = true;
+                                      _isProceeding = true;
                                     });
 
                                     final canContinue = await _confirmOverwriteIfNeeded();
+                                    if (!mounted) return;
                                     if (!canContinue) {
-                                      if (!context.mounted) return;
                                       setState(() {
-                                        _isActivating = false;
+                                        _isProceeding = false;
                                       });
                                       return;
                                     }
 
-                                    final selectedPlan = plans[_selectedIndex];
-                                    final user = await _apiService.registerUser(
-                                      phone: phone,
-                                      platformName: platform,
-                                      zone: pincode.isNotEmpty ? pincode : zone,
-                                      planName: selectedPlan.name,
-                                      name: name,
-                                    );
-
-                                    if (!context.mounted) return;
-
                                     setState(() {
-                                      _isActivating = false;
+                                      _isProceeding = false;
                                     });
 
-                                    if (user == null) {
-                                      if (!context.mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Activation failed. Please verify OTP again and retry.'),
-                                        ),
-                                      );
-                                      return;
-                                    }
+                                    final selectedPlan = plans[_selectedIndex];
 
-                                    if (!context.mounted) return;
-                                    Navigator.pushNamedAndRemoveUntil(
+                                    Navigator.pushNamed(
                                       context,
-                                      AppRoutes.home,
-                                      (route) => false,
+                                      AppRoutes.paymentConfirm,
+                                      arguments: PaymentFlowArguments(
+                                        plan: selectedPlan,
+                                        phone: phone,
+                                        name: name,
+                                        platform: platform,
+                                        zone: zone,
+                                        pincode: pincode,
+                                      ),
                                     );
                                   },
                             style: ElevatedButton.styleFrom(
@@ -268,9 +256,9 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                 Text(
                                   plans.isEmpty
                                       ? 'No plans available'
-                                      : _isActivating
-                                          ? 'Activating...'
-                                          : 'Activate for ₹${plans[_selectedIndex].weeklyPremium}/week',
+                                      : _isProceeding
+                                          ? 'Checking...'
+                                          : 'Continue to payment',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
