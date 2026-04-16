@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -7,6 +8,7 @@ from ..core.config import settings
 from ..core.db import (
     get_worker,
     purge_stale_worker_location_signals,
+    set_pending_worker_plan,
     total_settled_amount_for_phone,
     upsert_worker,
     upsert_worker_location_signal,
@@ -33,6 +35,18 @@ from ..services.trigger_monitor import update_worker_gps
 
 router = APIRouter(tags=["workers"])
 logger = logging.getLogger(__name__)
+
+
+def _next_cycle_start_utc(now: datetime | None = None) -> datetime:
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    current_cycle_start = current.replace(hour=0, minute=1, second=0, microsecond=0) - timedelta(days=current.weekday())
+    if current < current_cycle_start:
+        return current_cycle_start
+
+    days_until_next_monday = 7 - current.weekday()
+    if days_until_next_monday <= 0:
+        days_until_next_monday = 7
+    return (current + timedelta(days=days_until_next_monday)).replace(hour=0, minute=1, second=0, microsecond=0)
 
 
 def _safe_policy_id(zone_pincode: str) -> str:
@@ -72,6 +86,11 @@ async def register(payload: RegisterRequest, current_phone: str = Depends(get_cu
         zone_pincode=pincode,
         zone_name=zone_name,
         plan_name=selected.name,
+    )
+    await set_pending_worker_plan(
+        normalized_phone,
+        selected.name,
+        _next_cycle_start_utc(),
     )
 
     record = await get_worker(normalized_phone)
@@ -185,6 +204,8 @@ async def update_my_worker(
         zone_pincode=pincode,
         zone_name=str(zone_data.get("name", zone_key)),
         plan_name=selected.name,
+        pending_plan_name=selected.name,
+        pending_plan_effective_at=_next_cycle_start_utc(),
     )
 
     refreshed = await get_worker(str(worker["phone"]))

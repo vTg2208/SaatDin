@@ -666,6 +666,8 @@ async def upsert_worker(
     zone_pincode: str,
     zone_name: str,
     plan_name: str,
+    pending_plan_name: str | None = None,
+    pending_plan_effective_at: datetime | None = None,
 ) -> None:
     now = _utc_now()
     default_upi = f"{phone}@saatdin"
@@ -688,20 +690,33 @@ async def upsert_worker(
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 1, NULL, 0, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, 0, ?, ?, ?)
         ON CONFLICT(phone) DO UPDATE SET
             name = excluded.name,
             platform_name = excluded.platform_name,
             zone_pincode = excluded.zone_pincode,
             zone_name = excluded.zone_name,
             plan_name = excluded.plan_name,
-            pending_plan_name = NULL,
-            pending_plan_effective_at = NULL,
+            pending_plan_name = COALESCE(excluded.pending_plan_name, workers.pending_plan_name),
+            pending_plan_effective_at = COALESCE(excluded.pending_plan_effective_at, workers.pending_plan_effective_at),
             payout_primary_upi = COALESCE(workers.payout_primary_upi, excluded.payout_primary_upi),
             payout_provider_contact = excluded.payout_provider_contact,
             updated_at = excluded.updated_at
         """,
-        (phone, name, platform_name, zone_pincode, zone_name, plan_name, default_upi, phone, now, now),
+        (
+            phone,
+            name,
+            platform_name,
+            zone_pincode,
+            zone_name,
+            plan_name,
+            pending_plan_name,
+            pending_plan_effective_at,
+            default_upi,
+            phone,
+            now,
+            now,
+        ),
     )
 
 
