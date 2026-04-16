@@ -149,7 +149,7 @@ Weekly Premium = Base Rate x Zone Risk Multiplier x Platform Factor
 - Blinkit / Zepto (10-minute delivery commitment, higher outdoor exposure): 1.1×
 - Swiggy Instamart (30-minute delivery): 1.0×
 
-**Loyalty Discount:** planned follow-up work. It is not applied in the local build yet, so the formula above reflects the current backend behavior.
+**Loyalty Discount:** the backend now computes clean streak weeks and returns the loyalty discount percent in policy responses. The billed weekly premium currently remains the selected plan premium, so the discount is tracked for policy logic rather than auto-applied to the stored premium amount.
 
 **Three coverage tiers:**
 
@@ -194,19 +194,19 @@ ZoneLock is the only trigger that cannot always be verified purely by a sensor f
 
 ![SaatDin Architecture Diagram](arch.png)
 
-SaatDin uses a three-tier decision engine called **TriBrain**, orchestrated as a stateful graph using [LangGraph](https://github.com/langchain-ai/langgraph) (open source, Python, free). LangGraph models each decision step — rule check, ML inference, LLM reasoning — as nodes in a directed graph, with edges controlling routing based on confidence scores. This provides human-in-the-loop checkpoints, fault tolerance, and full auditability of every claim decision.
+SaatDin uses a three-stage decision pipeline called **TriBrain**. In the current backend, trigger detection runs first, claim fraud scoring runs second, and LLM fallback is only used for ambiguous cases near the anomaly threshold. LangGraph is used for the LLM fallback flow, but the main routing is implemented in Python code rather than as a fully general graph scheduler.
 
 ```
-Confidence ≥ 0.90  →  Tier 1: Rule Engine     (instant, no model call)
-Confidence 0.60–0.89  →  Tier 2: ML Engine   (scikit-learn / XGBoost)
-Confidence < 0.60   →  Tier 3: LLM Brain     (Groq API, free tier)
+Qualifying trigger detected in zone  →  Tier 1: Rule Engine     (live trigger, with static zone-risk fallback when live data is unavailable)
+Claim scored with model + signal adjustments  →  Tier 2: ML Engine   (Isolation Forest + tower/motion/GPS checks)
+Near-threshold ambiguity with supported trigger confidence  →  Tier 3: LLM Brain     (Groq/Gemini fallback)
 ```
 
 ### Tier 1 — Rule Engine
-Hard-coded parametric rules evaluated as the first graph node. If `rainfall_3hr > 35` and `worker.pincode == event.pincode`, trigger fires immediately. Handles the majority of clear-cut cases with zero latency and zero API cost.
+Hard-coded parametric rules evaluated first in the trigger monitor. If a zone crosses a qualifying rainfall, AQI, traffic, heat, or ZoneLock threshold, the backend creates the trigger event immediately. This is the path used for the high-confidence trigger cases.
 
 ### Tier 2 — ML Engine
-A Random Forest model for dynamic premium calculation. An Isolation Forest model for anomaly detection in claims. Both trained on synthetic Bangalore weather and delivery data; will be updated with real data as it becomes available.
+A Random Forest-style premium calculator feeds the weekly pricing view, while an Isolation Forest model scores claims for fraud/anomaly risk. Both are trained on synthetic Bangalore weather and delivery data and are adjusted with tower, motion, and GPS validation signals at scoring time.
 
 Input features for the premium model:
 ```python
@@ -224,7 +224,7 @@ features = [
 `zone_traffic_congestion_score` is computed from TomTom's historical traffic flow data for each pincode. Pincodes on major arterial corridors — Outer Ring Road (Whitefield, Marathahalli), Hosur Road (Bommanahalli, Silk Board), and Bannerghatta Road — carry higher baseline congestion scores that directly increase the Zone Risk Multiplier. This means workers based in chronically gridlocked zones pay a slightly higher premium, reflecting the realistic frequency of TrafficBlock events in their area.
 
 ### Tier 3 — LLM Brain
-[Groq API](https://console.groq.com) running `llama-3.3-70b-versatile` in the cloud. Used only for ambiguous fraud cases where Tiers 1 and 2 disagree.
+[Groq API](https://console.groq.com) running `llama-3.3-70b-versatile` in the cloud, with Gemini fallback. Used only when the claim score is near the fraud threshold and the trigger confidence is inside the configured ambiguity band, so the system can resolve borderline cases with stricter JSON output.
 
 ---
 
@@ -303,7 +303,7 @@ This ensures that a failed API or an unlisted disruption type does not leave a w
 
 ## Local Development
 
-SaatDin now runs locally in a **SQLite-first** configuration. No Supabase project is required for day-to-day development.
+SaatDin runs against a Supabase/Postgres-backed backend. The runtime code expects a configured `SUPABASE_DB_URL`, and local development should use the same Postgres-backed data model as hosted environments.
 
 1. Copy `backend/.env.example` to `backend/.env` if you want to override defaults.
 2. Install backend dependencies:
@@ -328,7 +328,7 @@ flutter run
 The worker app talks to `http://localhost:8000/api/v1`, and the admin dashboard is served from `http://127.0.0.1:8000/admin/dashboard`.
 Default admin credentials for local review are `admin` / `saatdin-local`.
 
-Optional migration or hosted deployment scripts can still target Supabase later, but they are no longer required for local setup.
+Optional migration scripts still exist for older data paths, but they are no longer the source of truth for the current runtime.
 
 On Windows, you can also use a single helper command:
 
@@ -344,8 +344,7 @@ powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
 |---|---|
 | Backend API | Python 3.11, FastAPI |
 | Agent orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) (open source) |
-| Database (local dev) | SQLite |
-| Database (optional hosted target) | Supabase migration scripts |
+| Database | Supabase/Postgres via asyncpg |
 | Task scheduling | APScheduler |
 | ML models | scikit-learn |
 | NLP (ZoneLock) | Lightweight keyword + similarity classifier |
@@ -395,12 +394,3 @@ Behind the scene workers.
 ---
 
 *Premium ranges, zone risk multipliers, and trigger thresholds are design decisions made for this prototype. They are not derived from actuarial data and will require calibration before any real-world deployment.*
-
-
-
-
-
-
-
-
-
