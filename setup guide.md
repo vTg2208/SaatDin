@@ -49,23 +49,23 @@ From project root, install backend dependencies:
 python -m pip install -r backend/requirements.txt
 ```
 
-Create environment config for Supabase (required):
+Create environment config for local SQLite development:
 
 ```powershell
-copy backend/.env.example .env
+copy backend/.env.example backend/.env
 ```
 
-Edit `.env` and set:
+Edit `backend/.env` if you want to override defaults:
 
 ```env
-SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
+DATABASE_PATH=backend/backend_data.db
 FRAUD_SCORING_ENABLED=true
 FRAUD_MODEL_PATH=backend/models/fraud/fraud_iforest_latest.joblib
 FRAUD_ANOMALY_THRESHOLD=-0.05
 FRAUD_FAIL_OPEN=true
 ```
 
-Optional: migrate existing local SQLite data into Supabase once:
+Optional: migrate existing local SQLite data into Supabase once you need a hosted database:
 
 ```powershell
 python backend/scripts/migrate_sqlite_to_supabase.py --sqlite backend/backend_data.db --supabase-db-url "postgresql://postgres:<password>@<host>:5432/postgres"
@@ -109,8 +109,23 @@ Expected response:
 - GET /api/v1/zones
 - GET /api/v1/zones/{pincode}
 - GET /api/v1/plans?zone={zone}&platform={platform}
-- POST /api/v1/register
+- POST /api/v1/workers/register
+- GET /api/v1/workers/status
+- GET /api/v1/workers/me
+- PUT /api/v1/workers/me
+- POST /api/v1/workers/location-signal
+- GET /api/v1/policy
+- PUT /api/v1/policy/update
+- GET /api/v1/claims
+- POST /api/v1/claims/submit
+- POST /api/v1/claims/{claim_id}/escalate
+- GET /api/v1/payouts/me
+- PUT /api/v1/payouts/accounts/{slot}
+- POST /api/v1/payouts/accounts/{slot}/verify
+- GET /api/v1/payouts/statements
 - GET /api/v1/triggers/active?zone={zone}
+- POST /api/v1/triggers/zonelock/report
+- GET /admin/dashboard
 
 ## 7. Run App + Backend Together
 
@@ -126,7 +141,13 @@ python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 flutter run
 ```
 
-The app will use backend endpoints where available and fallback behavior where needed.
+The app uses the local backend directly. Admin review is available at `http://127.0.0.1:8000/admin/dashboard` with default credentials `admin` / `saatdin-local`.
+
+Optional one-command Windows helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+```
 
 ## 8. Troubleshooting
 
@@ -163,8 +184,8 @@ python backend/scripts/train_isolation_forest.py --output-dir backend/models/fra
 ## 10. Notes
 
 - Zone and risk data are currently loaded from assets/data/zone_risk_runtime.json.
-- Dynamic onboarding zone selection and plan pricing are integrated.
-- Additional Phase 2 modules (persistent DB, scheduled triggers, claims payout flow) can be built on top of this setup.
+- Dynamic onboarding, claims, escalations, payouts, admin review, and mobile signal ingestion are integrated.
+- Supabase migration remains optional for hosted deployments, but it is not required for local development.
 
 ## 11. Co-Claim Cluster Risk Scoring (Ops)
 

@@ -5,6 +5,7 @@ import '../../models/claim_model.dart';
 import '../../models/plan_model.dart';
 import '../../models/user_model.dart';
 import '../../services/api_service.dart';
+import '../../services/policy_document_opener.dart';
 import '../../services/tab_router.dart';
 import '../../theme/app_colors.dart';
 
@@ -16,12 +17,44 @@ class CoverageScreen extends StatefulWidget {
 }
 
 class _CoverageScreenState extends State<CoverageScreen> {
+  static const String _policyDocumentAssetPath =
+      'assets/documents/SaatDin Policy Document.pdf';
+  static const List<InsurancePlan> _defaultPlans = <InsurancePlan>[
+    InsurancePlan(
+      name: 'Starter',
+      weeklyPremium: 45,
+      perTriggerPayout: 280,
+      maxDaysPerWeek: 3,
+    ),
+    InsurancePlan(
+      name: 'Smart',
+      weeklyPremium: 70,
+      perTriggerPayout: 400,
+      maxDaysPerWeek: 4,
+      isPopular: true,
+    ),
+    InsurancePlan(
+      name: 'Pro',
+      weeklyPremium: 95,
+      perTriggerPayout: 520,
+      maxDaysPerWeek: 5,
+    ),
+  ];
+
   final ApiService _apiService = ApiService();
-  List<InsurancePlan> _plans = const <InsurancePlan>[];
+  List<InsurancePlan> _plans = List<InsurancePlan>.from(_defaultPlans);
   List<Claim> _claims = const <Claim>[];
-  User? _user;
+  User _user = const User.empty();
+  String _activePlanName = '';
+  int _activeWeeklyPremium = 0;
+  int _activePerTriggerPayout = 0;
+  int _activeMaxDaysPerWeek = 0;
   String? _pendingPlanName;
   String? _pendingEffectiveDate;
+  String? _tierConsistencyWarning;
+  String? _dataSyncNotice;
+  int? _backendCleanStreakWeeks;
+  double? _backendLoyaltyDiscountPercent;
   bool _isLoading = true;
   int _currentTierIndex = 1;
   int _selectedTierIndex = 1;
@@ -79,33 +112,98 @@ class _CoverageScreenState extends State<CoverageScreen> {
     });
 
     try {
-      final user = await _apiService.getProfile('me');
-      final policy = await _apiService.getPolicy('me');
-      final plans = await _apiService.getPlans(zone: user.zone, platform: user.platform);
-      final claims = await _apiService.getClaims('me');
+      var user = _user;
+      var plans = List<InsurancePlan>.from(_plans.isEmpty ? _defaultPlans : _plans);
+      var claims = List<Claim>.from(_claims);
+      var policy = <String, dynamic>{};
+      String? syncNotice;
+
+      try {
+        user = await _apiService.getProfile('me');
+      } catch (error) {
+        syncNotice = _isAuthRelatedError(error)
+            ? 'Live policy data unavailable. Showing standard coverage until you sign in.'
+            : 'Could not refresh live policy data. Showing standard coverage.';
+      }
+
+      try {
+        policy = await _apiService.getPolicy('me');
+      } catch (_) {
+        syncNotice ??= 'Using standard coverage values while live policy sync is unavailable.';
+      }
+
+      final planZone = user.zonePincode.trim().isNotEmpty ? user.zonePincode : user.zone;
+      final planPlatform = user.platform.trim();
+      if (planZone.isNotEmpty && planPlatform.isNotEmpty) {
+        try {
+          final fetchedPlans = await _apiService.getPlans(zone: planZone, platform: planPlatform);
+          if (fetchedPlans.isNotEmpty) {
+            plans = fetchedPlans;
+          }
+        } catch (_) {
+          syncNotice ??= 'Using standard plan tiers while live plans sync is unavailable.';
+        }
+      }
+
+      try {
+        claims = await _apiService.getClaims('me');
+      } catch (_) {
+        // Keep claim history optional so the screen can still render.
+      }
+
+      final activePlanName = _coerceString(
+        policy['plan'],
+        fallback: _coerceString(user.plan, fallback: plans.first.name),
+      );
+      final activeWeeklyPremium =
+          (policy['weeklyPremium'] as num?)?.toInt() ?? plans.first.weeklyPremium;
+      final activePerTriggerPayout =
+          (policy['perTriggerPayout'] as num?)?.toInt() ?? plans.first.perTriggerPayout;
+      final activeMaxDaysPerWeek =
+          (policy['maxDaysPerWeek'] as num?)?.toInt() ?? plans.first.maxDaysPerWeek;
 
       var currentIndex = plans.indexWhere(
-        (p) => p.name.toLowerCase() == ((policy['plan'] as String? ?? user.plan).toLowerCase()),
+        (p) => p.name.toLowerCase() == activePlanName.toLowerCase(),
       );
-      if (currentIndex < 0) currentIndex = 0;
+      if (currentIndex < 0) {
+        currentIndex = 0;
+      }
+      final safeCurrentIndex = _clampIndex(currentIndex, plans.length);
+
+      final pendingPlanName = _coerceString(policy['pendingPlan']);
+      final hasActiveTierMismatch =
+          activePlanName.isNotEmpty && !_planExists(plans, activePlanName);
+      final hasPendingTierMismatch =
+          pendingPlanName.isNotEmpty && !_planExists(plans, pendingPlanName);
+
+      String? tierConsistencyWarning;
+      if (hasActiveTierMismatch) {
+        tierConsistencyWarning =
+            'Your active plan ($activePlanName) is not available in the current tier list. Current limits below are still enforced until backend tiers sync.';
+      } else if (hasPendingTierMismatch) {
+        tierConsistencyWarning =
+            'Your queued plan change ($pendingPlanName) is not available in the current tier list yet. Your current plan limits remain active this week.';
+      }
 
       if (!mounted) return;
       setState(() {
         _user = user;
         _plans = plans;
         _claims = claims;
+        _activePlanName = activePlanName;
+        _activeWeeklyPremium = activeWeeklyPremium;
+        _activePerTriggerPayout = activePerTriggerPayout;
+        _activeMaxDaysPerWeek = activeMaxDaysPerWeek;
         _pendingPlanName = policy['pendingPlan'] as String?;
         _pendingEffectiveDate = policy['pendingEffectiveDate'] as String?;
-        _currentTierIndex = currentIndex;
-        _selectedTierIndex = currentIndex;
-        _simulatorIndex = currentIndex;
+        _tierConsistencyWarning = tierConsistencyWarning;
+        _dataSyncNotice = syncNotice;
+        _backendCleanStreakWeeks = (policy['cleanStreakWeeks'] as num?)?.toInt();
+        _backendLoyaltyDiscountPercent = (policy['loyaltyDiscountPercent'] as num?)?.toDouble();
+        _currentTierIndex = safeCurrentIndex;
+        _selectedTierIndex = safeCurrentIndex;
+        _simulatorIndex = safeCurrentIndex;
       });
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load coverage from backend.')),
-        );
-      }
     } finally {
       if (mounted) {
         setState(() {
@@ -113,6 +211,15 @@ class _CoverageScreenState extends State<CoverageScreen> {
         });
       }
     }
+  }
+
+  bool _isAuthRelatedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('authentication required') ||
+        message.contains('not authenticated') ||
+        message.contains('unauthorized') ||
+        message.contains('token') ||
+        message.contains('worker not found for token subject');
   }
 
   @override
@@ -125,19 +232,10 @@ class _CoverageScreenState extends State<CoverageScreen> {
     }
 
     final user = _user;
-    if (user == null || _plans.isEmpty) {
-      return const Scaffold(
-        backgroundColor: AppColors.scaffoldBackground,
-        body: Center(
-          child: Text(
-            'Coverage data unavailable. Please retry.',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ),
-      );
-    }
-
-    final selectedPlan = _plans[_selectedTierIndex];
+    final selectedTierIndex = _clampIndex(_selectedTierIndex, _plans.length);
+    final currentTierIndex = _clampIndex(_currentTierIndex, _plans.length);
+    final simulatorIndex = _clampIndex(_simulatorIndex, _plans.length);
+    final selectedPlan = _plans[selectedTierIndex];
     final estimatedPremium = _calculateEstimatedPremium();
 
     return Scaffold(
@@ -180,20 +278,33 @@ class _CoverageScreenState extends State<CoverageScreen> {
                       color: AppColors.textSecondary,
                     ),
                   ),
+                  if (_dataSyncNotice != null && _dataSyncNotice!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildDataSyncNotice(_dataSyncNotice!),
+                  ],
                   const SizedBox(height: 18),
               const _CoverageSectionHeader('Tier Selector'),
               const SizedBox(height: 10),
+              if (_tierConsistencyWarning != null && _tierConsistencyWarning!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildTierConsistencyWarning(_tierConsistencyWarning!),
+                ),
               if (_pendingPlanName != null && _pendingPlanName!.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _buildPendingPlanNotice(),
                 ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildCurrentPlanLimitsCard(),
+              ),
               ..._plans.asMap().entries.map(
                 (entry) {
                   final index = entry.key;
                   final plan = entry.value;
-                  final isCurrent = index == _currentTierIndex;
-                  final isSelected = index == _selectedTierIndex;
+                  final isCurrent = index == currentTierIndex;
+                  final isSelected = index == selectedTierIndex;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -297,7 +408,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _selectedTierIndex == _currentTierIndex
+                  onPressed: selectedTierIndex == currentTierIndex
                       ? null
                       : () async {
                           try {
@@ -313,8 +424,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
                               SnackBar(
                                 content: Text(
                                   pendingEffectiveDate == null
-                                      ? '${selectedPlan.name} plan will apply next week.'
-                                      : '${selectedPlan.name} plan will apply from $pendingEffectiveDate.',
+                                      ? '${selectedPlan.name} plan will start with the next weekly cycle.'
+                                      : '${selectedPlan.name} plan starts on $pendingEffectiveDate.',
                                 ),
                               ),
                             );
@@ -338,7 +449,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                     ),
                   ),
                   child: Text(
-                    _selectedTierIndex == _currentTierIndex
+                    selectedTierIndex == currentTierIndex
                         ? 'Current tier active'
                         : 'Switch to ${selectedPlan.name}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -418,15 +529,13 @@ class _CoverageScreenState extends State<CoverageScreen> {
                       .toList(),
                 ),
               ),
-              const SizedBox(height: 20),
-              const _CoverageSectionHeader('Policy Document'),
               const SizedBox(height: 10),
               _buildCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Covered: income loss due to verified RainLock, AQI Guard, TrafficBlock, ZoneLock, and HeatBlock events in your registered zone.',
+                      'For complete terms and conditions, please refer to the policy document.',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -434,35 +543,13 @@ class _CoverageScreenState extends State<CoverageScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Not covered: health, life, personal injury, and vehicle repair costs.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Policy summary PDF download started.'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.download_outlined, size: 18),
-                      label: const Text('Download PDF Summary'),
-                      style: OutlinedButton.styleFrom(
+                    TextButton.icon(
+                      onPressed: _openPolicyDocument,
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      label: const Text('View policy document'),
+                      style: TextButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.border),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                       ),
                     ),
                   ],
@@ -513,7 +600,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Selected tier: ${_plans[_simulatorIndex].name}',
+                      'Selected tier: ${_plans[simulatorIndex].name}',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -521,11 +608,11 @@ class _CoverageScreenState extends State<CoverageScreen> {
                       ),
                     ),
                     Slider(
-                      value: _simulatorIndex.toDouble(),
+                      value: simulatorIndex.toDouble(),
                       min: 0,
                       max: (_plans.length - 1).toDouble(),
                       divisions: _plans.length > 1 ? _plans.length - 1 : null,
-                      label: _plans[_simulatorIndex].name,
+                      label: _plans[simulatorIndex].name,
                       activeColor: AppColors.primary,
                       onChanged: (value) {
                         setState(() {
@@ -549,7 +636,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'If you had been on ${_plans[_simulatorIndex].name} last month, your estimated payout would have been Rs ${_currencyFormat.format(_simulatedPayout(_simulatorIndex))}.',
+                      'If you had been on ${_plans[simulatorIndex].name} last month, your estimated payout would have been Rs ${_currencyFormat.format(_simulatedPayout(simulatorIndex))}.',
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textPrimary,
@@ -566,6 +653,23 @@ class _CoverageScreenState extends State<CoverageScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openPolicyDocument() async {
+    final opened = await openPolicyDocument(
+      context,
+      assetPath: _policyDocumentAssetPath,
+    );
+
+    if (!mounted) return;
+
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open policy document right now.'),
+        ),
+      );
+    }
   }
 
   Widget _buildTopUtilityButtons(User user) {
@@ -649,7 +753,46 @@ class _CoverageScreenState extends State<CoverageScreen> {
 
   double _calculateEstimatedPremium() {
     if (_plans.isEmpty) return 0;
-    return _plans[_selectedTierIndex].weeklyPremium.toDouble();
+    final safeIndex = _clampIndex(_selectedTierIndex, _plans.length);
+    return _plans[safeIndex].weeklyPremium.toDouble();
+  }
+
+  int _clampIndex(int index, int length) {
+    if (length <= 0) return 0;
+    return index.clamp(0, length - 1).toInt();
+  }
+
+  Widget _buildDataSyncNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.infoLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline, color: AppColors.info, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   int _simulatedPayout(int tierIndex) {
@@ -690,9 +833,87 @@ class _CoverageScreenState extends State<CoverageScreen> {
     );
   }
 
+  Widget _buildTierConsistencyWarning(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentPlanLimitsCard() {
+    final activeName = _activePlanName.isEmpty ? 'Current plan' : _activePlanName;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.infoLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$activeName limits active this week',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Premium: Rs $_activeWeeklyPremium · Per trigger: Rs $_activePerTriggerPayout · Max days/week: $_activeMaxDaysPerWeek',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _planExists(List<InsurancePlan> plans, String planName) {
+    final target = planName.trim().toLowerCase();
+    if (target.isEmpty) return false;
+    return plans.any((plan) => plan.name.trim().toLowerCase() == target);
+  }
+
   int get _cleanStreakWeeks {
+    if (_backendCleanStreakWeeks != null && _backendCleanStreakWeeks! >= 0) {
+      return _backendCleanStreakWeeks!;
+    }
+
     if (_claims.isEmpty) {
-      return 6;
+      return 0;
     }
 
     final now = DateTime.now();
@@ -717,6 +938,13 @@ class _CoverageScreenState extends State<CoverageScreen> {
   }
 
   double get _loyaltyDiscountPercent {
+    if (_backendLoyaltyDiscountPercent != null) {
+      final value = _backendLoyaltyDiscountPercent!;
+      if (value >= 0) {
+        return value;
+      }
+    }
+
     if (_cleanStreakWeeks >= 6) return 10;
     if (_cleanStreakWeeks >= 4) return 5;
     return 0;

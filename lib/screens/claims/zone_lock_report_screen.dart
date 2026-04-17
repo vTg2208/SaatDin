@@ -35,6 +35,9 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
   final List<String> _impactOptions = ['Partial', 'Full', 'Critical'];
 
   _SubmitState _submitState = _SubmitState.idle;
+  bool _isCapStateLoading = true;
+  bool _weeklyCapReached = false;
+  String _weeklyCapMessage = '';
   late final AnimationController _successAnimController;
   late final Animation<double> _successScale;
 
@@ -49,6 +52,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
       parent: _successAnimController,
       curve: Curves.elasticOut,
     );
+    _loadWeeklyCapState();
   }
 
   @override
@@ -60,6 +64,24 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
   }
 
   Future<void> _submit() async {
+    if (_isCapStateLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Checking weekly coverage limits...')),
+      );
+      return;
+    }
+
+    if (_weeklyCapReached) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          content: Text(_weeklyCapMessage),
+        ),
+      );
+      return;
+    }
+
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _submitState = _SubmitState.loading);
@@ -72,9 +94,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
         'Details: ${_descriptionController.text.trim()}';
 
     try {
-      await _apiService.submitClaim(
-        userId: 'me',
-        type: ClaimType.zoneLock,
+      await _apiService.submitZoneLockReport(
         description: description,
       );
 
@@ -106,6 +126,57 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _loadWeeklyCapState() async {
+    setState(() {
+      _isCapStateLoading = true;
+      _weeklyCapReached = false;
+      _weeklyCapMessage = '';
+    });
+
+    try {
+      final policy = await _apiService.getPolicy('me');
+      final claims = await _apiService.getClaims('me');
+      final maxDaysPerWeek = (policy['maxDaysPerWeek'] as num? ?? 0).toInt();
+      final planName = (policy['plan'] as String? ?? 'Current plan').trim();
+
+      final nowUtc = DateTime.now().toUtc();
+      final weekStartUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day)
+          .subtract(Duration(days: nowUtc.weekday - 1));
+
+      final settledDayKeys = <String>{};
+      for (final claim in claims) {
+        if (claim.status != ClaimStatus.settled) continue;
+        final claimUtc = claim.date.toUtc();
+        if (claimUtc.isBefore(weekStartUtc)) continue;
+        settledDayKeys.add('${claimUtc.year}-${claimUtc.month}-${claimUtc.day}');
+      }
+
+      final settledDaysThisWeek = settledDayKeys.length;
+      final reachedCap = maxDaysPerWeek > 0 && settledDaysThisWeek >= maxDaysPerWeek;
+      final coveredDaysLeft = (maxDaysPerWeek - settledDaysThisWeek).clamp(0, maxDaysPerWeek);
+      final message = reachedCap
+          ? 'Weekly cap reached for $planName ($maxDaysPerWeek covered days/week). New ZoneLock reports can be submitted after weekly reset.'
+          : 'Coverage left this week: $coveredDaysLeft of $maxDaysPerWeek days on $planName.';
+
+      if (!mounted) return;
+      setState(() {
+        _weeklyCapReached = reachedCap;
+        _weeklyCapMessage = message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _weeklyCapReached = false;
+        _weeklyCapMessage = '';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isCapStateLoading = false;
+      });
     }
   }
 
@@ -149,36 +220,38 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 40),
 
-            // Back + title row
+            // Back button
             Row(
               children: [
                 _IconBtn(
                   icon: Icons.arrow_back,
                   onTap: () => Navigator.of(context).pop(),
                 ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'ZoneLock Report',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    Text(
-                      'Manual zone-block incident submission',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Title row
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'ZoneLock Report',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                Text(
+                  'Manual zone-block incident submission',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -217,6 +290,53 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
               ),
             ),
             const SizedBox(height: 24),
+
+            if (_isCapStateLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: LinearProgressIndicator(minHeight: 3),
+              )
+            else if (_weeklyCapMessage.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _weeklyCapReached
+                        ? AppColors.warning.withValues(alpha: 0.14)
+                        : AppColors.infoLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _weeklyCapReached
+                          ? AppColors.warning.withValues(alpha: 0.4)
+                          : AppColors.info.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _weeklyCapReached ? Icons.warning_amber_rounded : Icons.info_outline,
+                        size: 18,
+                        color: _weeklyCapReached ? AppColors.warning : AppColors.info,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _weeklyCapMessage,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             _SectionLabel(label: 'Affected Location / Zone'),
             const SizedBox(height: 8),
@@ -344,7 +464,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
-                      'Reports are reviewed within 24 hours. You will be '
+                      'Reports are reviewed within 2 hours. You will be '
                       'notified once your claim is processed.',
                       style: TextStyle(
                         fontSize: 12,
@@ -363,7 +483,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: isLoading ? null : _submit,
+                onPressed: (isLoading || _isCapStateLoading || _weeklyCapReached) ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -381,6 +501,14 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                           color: Colors.white,
                         ),
                       )
+                    : _isCapStateLoading
+                        ? const Text(
+                            'Checking limits...',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
                     : const Text(
                         'Submit ZoneLock Report',
                         style: TextStyle(
@@ -428,7 +556,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
             ),
             const SizedBox(height: 8),
             const Text(
-              'Your ZoneLock report has been received.\nOur team will review it within 24 hours.',
+              'Your ZoneLock report has been received.\nCorroborated reports are auto-confirmed, otherwise review completes within 2 hours.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,

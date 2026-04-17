@@ -1,36 +1,58 @@
 from __future__ import annotations
 
-import json
-from functools import lru_cache
 from typing import Any, Dict, Tuple
 
 from fastapi import HTTPException
 
-from .config import settings
+from .db import list_zone_risk_rows
 from ..models.platform import Platform
 from ..models.schemas import ZoneOut
 
-
-@lru_cache(maxsize=1)
-def load_zone_map() -> Dict[str, Dict[str, Any]]:
-    path = settings.zone_file_path
-    if not path.exists():
-        raise RuntimeError("zone_risk_runtime.json not found")
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return raw.get("pincodes", {})
+_ZONE_MAP: Dict[str, Dict[str, Any]] = {}
+_ZONE_NAME_INDEX: Dict[str, str] = {}
 
 
-@lru_cache(maxsize=1)
-def zone_name_index() -> Dict[str, str]:
-    return {
-        str(zone.get("name", "")).strip().lower(): pincode
-        for pincode, zone in load_zone_map().items()
+async def refresh_zone_cache() -> Dict[str, Dict[str, Any]]:
+    global _ZONE_MAP
+    global _ZONE_NAME_INDEX
+
+    rows = await list_zone_risk_rows()
+    zone_map: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        pincode = str(row.get("pincode", "")).strip()
+        zone_json = row.get("zone_json")
+        if not pincode or not isinstance(zone_json, dict):
+            continue
+        zone_map[pincode] = zone_json
+    if not zone_map:
+        raise RuntimeError(
+            "zone_risk table has no usable rows. Run DB migrations and seed zone_risk data before startup."
+        )
+
+    _ZONE_MAP = zone_map
+    _ZONE_NAME_INDEX = {
+        str(zone.get("name", "")).strip().lower(): pincode for pincode, zone in zone_map.items()
     }
+    return _ZONE_MAP
+
+
+def load_zone_map() -> Dict[str, Dict[str, Any]]:
+    if not _ZONE_MAP:
+        raise RuntimeError("zone cache not loaded; call refresh_zone_cache() during startup")
+    return _ZONE_MAP
+
+
+def zone_name_index() -> Dict[str, str]:
+    if not _ZONE_NAME_INDEX:
+        _ = load_zone_map()
+    return _ZONE_NAME_INDEX
 
 
 def clear_zone_cache() -> None:
-    load_zone_map.cache_clear()
-    zone_name_index.cache_clear()
+    global _ZONE_MAP
+    global _ZONE_NAME_INDEX
+    _ZONE_MAP = {}
+    _ZONE_NAME_INDEX = {}
 
 
 def resolve_zone(zone_key: str) -> Tuple[str, Dict[str, Any]]:

@@ -14,24 +14,27 @@ class ProfileScreen extends StatelessWidget {
   static final ApiService _apiService = ApiService();
 
   Future<_ProfileViewData> _loadProfileViewData() async {
-    final user = await _apiService.getProfile('me');
-
-    Map<String, dynamic> policy = <String, dynamic>{};
-    List<Claim> claims = const <Claim>[];
+    User user = const User.empty();
 
     try {
-      policy = await _apiService.getPolicy('me');
+      user = await _apiService.getProfile('me');
     } catch (_) {
-      policy = <String, dynamic>{};
+      final status = await _apiService.getWorkerStatus();
+      user = status.worker ?? User.empty(phone: status.phone);
     }
 
-    try {
-      claims = await _apiService.getClaims('me');
-    } catch (_) {
-      claims = const <Claim>[];
-    }
+    final results = await Future.wait<dynamic>([
+      _apiService.getPolicy('me').catchError((_) => <String, dynamic>{}),
+      _apiService.getClaims('me').catchError((_) => const <Claim>[]),
+      _apiService.getPayoutDashboard().catchError((_) => <String, dynamic>{}),
+    ]);
 
-    return _ProfileViewData(user: user, policy: policy, claims: claims);
+    return _ProfileViewData(
+      user: user,
+      policy: results[0] as Map<String, dynamic>,
+      claims: results[1] as List<Claim>,
+      payoutDashboard: results[2] as Map<String, dynamic>,
+    );
   }
 
   @override
@@ -51,7 +54,7 @@ class ProfileScreen extends StatelessWidget {
             backgroundColor: AppColors.scaffoldBackground,
             body: Center(
               child: Text(
-                'Failed to load profile. Please retry.',
+                'Could not load settings. Please retry.',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
@@ -62,36 +65,68 @@ class ProfileScreen extends StatelessWidget {
         final user = data.user;
         final policy = data.policy;
         final claims = data.claims;
+        final payoutDashboard = data.payoutDashboard;
         final claimCountThisMonth = _claimCountForCurrentMonth(claims);
-        final settledPayout = _settledPayoutTotal(claims);
         final perTriggerPayout = _readInt(policy, const ['perTriggerPayout']);
         final activePlan = _readString(policy, const ['plan'], fallback: user.plan);
-        final locationLabel = _buildLocationLabel(user);
-        final policyStatusLabel =
-            _readString(policy, const ['status'], fallback: 'active').toLowerCase() == 'active'
-                ? 'Active policy'
-                : 'Policy update pending';
+        final weeklyPremium = _readInt(policy, const ['weeklyPremium']);
         final nextBillingDate = _readString(policy, const ['nextBillingDate']);
         final renewalLabel = _renewalLabel(nextBillingDate);
-        final contact = _formatPhone(user.phone);
+        final policyStatus = _readString(policy, const ['status'], fallback: 'active').toLowerCase();
+        final statusLabel = policyStatus == 'active'
+          ? 'Active policy'
+          : policyStatus == 'scheduled'
+            ? 'Plan change scheduled'
+            : 'Policy update pending';
+        final payoutSummary = _readMap(payoutDashboard, const ['summary']);
+        final settledTotal = _readDouble(payoutSummary, const ['settledTotal']);
+        final pendingTotal = _readDouble(payoutSummary, const ['pendingTotal']);
+        final primaryUpiMasked = _readString(payoutDashboard, const ['primaryUpiMasked']);
+        final provider = _readString(payoutDashboard, const ['provider']);
+        final notificationItems = _buildNotificationItems(policy);
+        final supportItems = _buildSupportItems(policy);
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF4F7F5),
-          body: Column(
+          backgroundColor: AppColors.scaffoldBackground,
+          body: Stack(
             children: [
-              _buildHeader(
-                context,
-                user,
-                contact,
-                policyStatusLabel,
-                locationLabel,
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  height: 205,
+                  child: CustomPaint(
+                    painter: _ProfileTopBackgroundPainter(),
+                  ),
+                ),
               ),
-              Expanded(
+              SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 28),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildTopUtilityButtons(context, notificationItems),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Manage your profile, coverage, and payouts.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       _buildCoverageBanner(
                         perTriggerPayout: perTriggerPayout,
                         activePlan: activePlan,
@@ -112,7 +147,9 @@ class ProfileScreen extends StatelessWidget {
                           iconBg: const Color(0xFFE1F5EE),
                           iconColor: const Color(0xFF0F6E56),
                           title: 'Payouts',
-                          subtitle: '₹${NumberFormat('#,##0').format(settledPayout)} received',
+                          subtitle: pendingTotal > 0
+                              ? '₹${NumberFormat('#,##0').format(settledTotal)} settled, ₹${NumberFormat('#,##0').format(pendingTotal)} pending'
+                              : '₹${NumberFormat('#,##0').format(settledTotal)} settled',
                           onTap: () => _switchToTab(context, 3),
                         ),
                         _MenuItemData(
@@ -122,44 +159,39 @@ class ProfileScreen extends StatelessWidget {
                           title: 'Plans and pricing',
                           subtitle: activePlan.trim().isEmpty
                               ? 'Check available plans'
-                              : '$activePlan plan active',
+                              : weeklyPremium > 0
+                                  ? '$activePlan • ₹${NumberFormat('#,##0').format(weeklyPremium)}/week'
+                                  : '$activePlan plan active',
                           onTap: () => _switchToTab(context, 2),
                         ),
                       ]),
                       _buildSectionLabel('Preferences'),
                       _buildMenuGroup([
                         _MenuItemData(
-                          icon: Icons.settings_outlined,
-                          iconBg: const Color(0xFFF0F2F0),
-                          iconColor: const Color(0xFF4A5E50),
-                          title: 'Settings',
-                          onTap: () =>
-                              _showSimpleInfo(context, 'Settings panel opened.'),
+                          icon: Icons.payments_outlined,
+                          iconBg: const Color(0xFFE1F5EE),
+                          iconColor: const Color(0xFF0F6E56),
+                          title: 'Payout settings',
+                          subtitle: primaryUpiMasked.isNotEmpty
+                              ? (provider.isNotEmpty ? '$provider • $primaryUpiMasked' : primaryUpiMasked)
+                              : (provider.isNotEmpty ? provider : 'No payout account returned'),
+                          onTap: () => _switchToTab(context, 3),
                         ),
                         _MenuItemData(
-                          icon: Icons.dark_mode_outlined,
-                          iconBg: const Color(0xFFF0F2F0),
-                          iconColor: const Color(0xFF4A5E50),
-                          title: 'Theme',
-                          onTap: () =>
-                              _showSimpleInfo(context, 'Theme controls opened.'),
-                        ),
-                        _MenuItemData(
-                          icon: Icons.grid_view_rounded,
-                          iconBg: const Color(0xFFE6F1FB),
-                          iconColor: const Color(0xFF185FA5),
-                          title: 'Advanced tools',
-                          badge: 'Beta',
-                          onTap: () => _showSimpleInfo(
-                              context, 'Advanced tools coming soon.'),
+                          icon: Icons.workspace_premium_outlined,
+                          iconBg: const Color(0xFFFAEEDA),
+                          iconColor: const Color(0xFF854F0B),
+                          title: 'Coverage details',
+                          subtitle: '$statusLabel • $renewalLabel',
+                          onTap: () => _switchToTab(context, 2),
                         ),
                         _MenuItemData(
                           icon: Icons.info_outline,
                           iconBg: const Color(0xFFE1F5EE),
                           iconColor: const Color(0xFF0F6E56),
-                          title: 'Help and resources',
-                          onTap: () =>
-                              _showSimpleInfo(context, 'Help center opened.'),
+                          title: 'Help and support',
+                          subtitle: supportItems.isEmpty ? null : '${supportItems.length} live support entries',
+                          onTap: () => _showSupportSheet(context, supportItems),
                         ),
                       ]),
                       _buildSectionLabel('Account'),
@@ -194,101 +226,102 @@ class ProfileScreen extends StatelessWidget {
     String locationLabel,
   ) {
     return Container(
-      color: AppColors.primary,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Top bar
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _headerIconButton(
-                    icon: Icons.arrow_back,
-                    onTap: () => _switchToTab(context, 0),
-                  ),
-                  _headerIconButton(
-                    icon: Icons.notifications_none,
-                    onTap: () => _showNotificationsSheet(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Profile row
-              Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.4),
-                          width: 2),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
+                ),
+                child: Center(
+                  child: Text(
+                    _displayInitial(user.name),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
                     ),
-                    child: Center(
-                      child: Text(
-                        _displayInitial(user.name),
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1.2,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          contact,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.white.withValues(alpha: 0.72),
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      contact,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontFamily: 'monospace',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  _editButton(context),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              // Status pills
-              Row(
-                children: [
-                  _statusPill(dotColor: const Color(0xFF6EFFC4), label: policyStatus),
-                  const SizedBox(width: 8),
-                  _statusPill(dotColor: const Color(0xFFFFD980), label: locationLabel),
-                ],
-              ),
+              const SizedBox(width: 10),
+              _editButton(context, user, contact),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _statusPill(dotColor: const Color(0xFF6EFFC4), label: policyStatus),
+              _statusPill(dotColor: const Color(0xFFFFD980), label: locationLabel),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildTopUtilityButtons(
+    BuildContext context,
+    List<_SheetItemData> notificationItems,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _headerIconButton(
+          icon: Icons.arrow_back,
+          onTap: () => _switchToTab(context, 0),
+        ),
+        _headerIconButton(
+          icon: Icons.notifications_none,
+          onTap: () => _showNotificationsSheet(context, notificationItems),
+        ),
+      ],
     );
   }
 
@@ -313,10 +346,10 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _editButton(BuildContext context) {
+  Widget _editButton(BuildContext context, User user, String contact) {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => _showSimpleInfo(context, 'Edit profile opened.'),
+      onTap: () => _showProfileDetailsSheet(context, user, contact),
       child: Container(
         padding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -327,7 +360,7 @@ class ProfileScreen extends StatelessWidget {
               Border.all(color: Colors.white.withValues(alpha: 0.25)),
         ),
         child: const Text(
-          'Edit',
+          'Details',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -343,6 +376,7 @@ class ProfileScreen extends StatelessWidget {
     required String label,
   }) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.15),
@@ -362,12 +396,16 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -579,7 +617,7 @@ class ProfileScreen extends StatelessWidget {
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
-  void _showNotificationsSheet(BuildContext context) {
+  void _showNotificationsSheet(BuildContext context, List<_SheetItemData> items) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -587,21 +625,196 @@ class ProfileScreen extends StatelessWidget {
         return ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          children: const [
+          children: items
+              .map(
+                (item) => ListTile(
+                  leading: Icon(item.icon),
+                  title: Text(item.title),
+                  subtitle: Text(item.subtitle),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  void _showProfileDetailsSheet(BuildContext context, User user, String contact) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          children: [
+            const Text(
+              'Profile details',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
             ListTile(
-              leading: Icon(Icons.verified_outlined),
-              title: Text('Profile verification completed'),
-              subtitle: Text('Your account details are fully up to date'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.person_outline),
+              title: Text(user.name),
+              subtitle: Text(contact),
             ),
             ListTile(
-              leading: Icon(Icons.shield_outlined),
-              title: Text('Security reminder'),
-              subtitle: Text('Review device activity once every week'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.location_on_outlined),
+              title: Text(user.zone.isEmpty ? 'Zone unavailable' : user.zone),
+              subtitle: Text(user.zonePincode.isEmpty ? 'Pincode unavailable' : user.zonePincode),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: Text(user.platform.isEmpty ? 'Platform unavailable' : user.platform),
+              subtitle: Text(user.plan.isEmpty ? 'Plan unavailable' : '${user.plan} plan'),
             ),
           ],
         );
       },
     );
+  }
+
+  void _showSupportSheet(BuildContext context, List<_SheetItemData> items) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          children: [
+            Text(
+              'Help and support',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 12),
+            ...items
+                .map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(item.icon),
+                    title: Text(item.title),
+                    subtitle: Text(item.subtitle),
+                  ),
+                )
+                .toList(),
+          ],
+        );
+      },
+    );
+  }
+
+  List<_SheetItemData> _buildNotificationItems(Map<String, dynamic> policy) {
+    final rawItems = _readMapList(policy, const ['notifications', 'notificationItems']);
+    return rawItems
+        .map((item) {
+          final title = _readString(item, const ['title', 'heading']);
+          final subtitle = _readString(item, const ['subtitle', 'message', 'description']);
+          if (title.isEmpty || subtitle.isEmpty) return null;
+          return _SheetItemData(
+            icon: _iconFromName(_readString(item, const ['icon', 'iconName'])),
+            title: title,
+            subtitle: subtitle,
+          );
+        })
+        .whereType<_SheetItemData>()
+        .toList();
+  }
+
+  List<_SheetItemData> _buildSupportItems(Map<String, dynamic> policy) {
+    final support = _readMap(policy, const ['support']);
+    final items = <_SheetItemData>[];
+
+    final helpline = _readString(support, const ['helpline', 'phone']);
+    final email = _readString(support, const ['email', 'supportEmail']);
+    final timeline = _readString(support, const ['escalationTimeline', 'timeline']);
+
+    if (helpline.isNotEmpty) {
+      items.add(
+        _SheetItemData(
+          icon: Icons.call_outlined,
+          title: 'Claims helpline',
+          subtitle: helpline,
+        ),
+      );
+    }
+    if (email.isNotEmpty) {
+      items.add(
+        _SheetItemData(
+          icon: Icons.mail_outline,
+          title: 'Support email',
+          subtitle: email,
+        ),
+      );
+    }
+    if (timeline.isNotEmpty) {
+      items.add(
+        _SheetItemData(
+          icon: Icons.rule_folder_outlined,
+          title: 'Escalation timeline',
+          subtitle: timeline,
+        ),
+      );
+    }
+
+    final supportItems = _readMapList(support, const ['items']);
+    for (final item in supportItems) {
+      final title = _readString(item, const ['title', 'heading']);
+      final subtitle = _readString(item, const ['subtitle', 'message', 'description']);
+      if (title.isEmpty || subtitle.isEmpty) continue;
+      items.add(
+        _SheetItemData(
+          icon: _iconFromName(_readString(item, const ['icon', 'iconName'])),
+          title: title,
+          subtitle: subtitle,
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Map<String, dynamic> _readMap(Map<String, dynamic> raw, List<String> keys) {
+    for (final key in keys) {
+      final value = raw[key];
+      if (value is Map<String, dynamic>) return value;
+    }
+    return <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> _readMapList(Map<String, dynamic> raw, List<String> keys) {
+    for (final key in keys) {
+      final value = raw[key];
+      if (value is List) {
+        return value.whereType<Map<String, dynamic>>().toList();
+      }
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  IconData _iconFromName(String iconName) {
+    switch (iconName.trim().toLowerCase()) {
+      case 'verified':
+      case 'check':
+        return Icons.verified_outlined;
+      case 'shield':
+      case 'security':
+        return Icons.shield_outlined;
+      case 'call':
+      case 'phone':
+        return Icons.call_outlined;
+      case 'mail':
+      case 'email':
+        return Icons.mail_outline;
+      case 'timeline':
+      case 'rules':
+        return Icons.rule_folder_outlined;
+      default:
+        return Icons.info_outline;
+    }
   }
 
   void _showSimpleInfo(BuildContext context, String message) {
@@ -670,6 +883,23 @@ class ProfileScreen extends StatelessWidget {
       if (value is num) return value.toInt();
       if (value is String) {
         final parsed = int.tryParse(value.replaceAll(',', '').trim());
+        if (parsed != null) return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  double _readDouble(
+    Map<String, dynamic> raw,
+    List<String> keys, {
+    double fallback = 0,
+  }) {
+    for (final key in keys) {
+      final value = raw[key];
+      if (value == null) continue;
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value.replaceAll(',', '').trim());
         if (parsed != null) return parsed;
       }
     }
@@ -750,14 +980,69 @@ class _MenuItemData {
   });
 }
 
+class _SheetItemData {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _SheetItemData({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+}
+
 class _ProfileViewData {
   const _ProfileViewData({
     required this.user,
     required this.policy,
     required this.claims,
+    required this.payoutDashboard,
   });
 
   final User user;
   final Map<String, dynamic> policy;
   final List<Claim> claims;
+  final Map<String, dynamic> payoutDashboard;
+}
+
+class _ProfileTopBackgroundPainter extends CustomPainter {
+  const _ProfileTopBackgroundPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFFE7F8F4),
+          Color(0xFFF1FBF8),
+          Color(0xFFF8FCFA),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+
+    final shapePaint = Paint()..color = AppColors.primary.withValues(alpha: 0.12);
+    final shapePath = Path()
+      ..moveTo(-20, size.height * 0.74)
+      ..lineTo(size.width * 0.42, size.height * 0.56)
+      ..lineTo(size.width + 30, size.height * 0.84)
+      ..lineTo(size.width + 30, size.height)
+      ..lineTo(-20, size.height)
+      ..close();
+    canvas.drawPath(shapePath, shapePaint);
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = AppColors.primary.withValues(alpha: 0.15);
+
+    canvas.drawCircle(Offset(size.width * 0.18, size.height * 0.2), 32, ringPaint);
+    canvas.drawCircle(Offset(size.width * 0.86, size.height * 0.3), 48, ringPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

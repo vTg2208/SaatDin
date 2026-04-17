@@ -45,38 +45,51 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     try {
       try {
         user = await _apiService.getProfile('me');
-      } catch (_) {
-        loadIssues.add('profile');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('profile');
+        }
       }
 
       try {
         policy = await _apiService.getPolicy('me');
-      } catch (_) {
-        loadIssues.add('policy');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('policy');
+        }
         policy = <String, dynamic>{};
       }
 
       try {
         claims = await _apiService.getClaims('me');
-      } catch (_) {
-        loadIssues.add('claims');
+      } catch (error) {
+        if (!_isAuthRelatedError(error)) {
+          loadIssues.add('claims');
+        }
         claims = const <Claim>[];
       }
 
       if (!mounted) return;
       setState(() {
-        _user = user ?? User.getMockUser();
+        _user = user ?? const User.empty();
         _policy = policy ?? <String, dynamic>{};
         _claims = claims;
       });
 
       if (loadIssues.isNotEmpty) {
+        final issueText = switch (loadIssues.first) {
+          'profile' => 'Could not load profile details.',
+          'policy' => 'Could not load policy details.',
+          'claims' => 'Could not load claim history.',
+          _ => 'Could not refresh claim details.',
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               loadIssues.length == 1
-                  ? 'Failed to load ${loadIssues.first} from backend.'
-                  : 'Loaded claims view with partial backend data.',
+                  ? issueText
+                  : 'Some claim details could not be refreshed.',
             ),
           ),
         );
@@ -88,6 +101,15 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
         });
       }
     }
+  }
+
+  bool _isAuthRelatedError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('authentication required') ||
+        message.contains('not authenticated') ||
+        message.contains('unauthorized') ||
+        message.contains('token') ||
+        message.contains('worker not found for token subject');
   }
 
   Widget _buildTopUtilityButtons(User user) {
@@ -173,7 +195,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     switch (_selectedTab) {
       case 1:
         return _claims
-            .where((c) => c.status == ClaimStatus.inReview)
+            .where((c) => c.status == ClaimStatus.inReview || c.status == ClaimStatus.escalated)
             .toList();
       case 2:
         return _claims
@@ -189,7 +211,9 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     final user = _user;
     final weeklyPremium = (_policy?['weeklyPremium'] as num? ?? 0).toInt();
     final policyStatus = ((_policy?['status'] as String?) ?? 'active').toUpperCase();
-    final inReviewCount = _claims.where((c) => c.status == ClaimStatus.inReview).length;
+    final inReviewCount = _claims
+        .where((c) => c.status == ClaimStatus.inReview || c.status == ClaimStatus.escalated)
+        .length;
 
     if (_isLoadingClaims) {
       return const Scaffold(
@@ -828,6 +852,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
               const SizedBox(height: 20),
               // Escalate button (Issue #9)
               if (claim.status == ClaimStatus.inReview ||
+                  claim.status == ClaimStatus.escalated ||
                   claim.status == ClaimStatus.pending)
                 SizedBox(
                   width: double.infinity,
@@ -852,7 +877,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                              'Escalation submitted. A senior reviewer will contact you within 48 hrs.'
+                              'Escalation submitted. A reviewer will contact you within 2 hrs.'
                             ),
                           ),
                         );

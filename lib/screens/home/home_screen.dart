@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../models/user_model.dart';
@@ -7,6 +8,7 @@ import '../../models/plan_model.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/tab_router.dart';
+import 'policy_status_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -14,25 +16,60 @@ class HomeScreen extends StatelessWidget {
   static final ApiService _apiService = ApiService();
 
   Future<_HomeViewData> _loadHomeViewData() async {
-    final user = await _apiService.getProfile('me');
-    final policy = await _apiService.getPolicy('me');
-    final claims = await _apiService.getClaims('me');
+    User user = const User.empty();
+    Map<String, dynamic> policy = <String, dynamic>{};
+    List<Claim> claims = const <Claim>[];
+
+    try {
+      user = await _apiService.getProfile('me');
+    } catch (_) {
+      user = const User.empty();
+    }
+
+    try {
+      policy = await _apiService.getPolicy('me');
+    } catch (_) {
+      policy = <String, dynamic>{};
+    }
+
+    try {
+      claims = await _apiService.getClaims('me');
+    } catch (_) {
+      claims = const <Claim>[];
+    }
+
     final latestClaim = _latestClaimForUpdates(claims);
     final perTriggerPayout = (policy['perTriggerPayout'] as num? ?? 0).toDouble();
     final zoneKey = (policy['zonePincode'] as String? ?? user.zonePincode).trim();
+    final policyZone = _coerceText(policy['zone'], fallback: user.zone);
+    final policyPlatform = _coerceText(policy['platform'], fallback: user.platform);
 
     final maxDaysPerWeek = (policy['maxDaysPerWeek'] as num? ?? 0).toInt();
-    final nextBillingRaw = (policy['nextBillingDate'] as String? ?? '').trim();
-    final nextBillingDate = DateTime.tryParse(nextBillingRaw);
-    final serverNow = nextBillingDate != null
-        ? nextBillingDate.toUtc().subtract(const Duration(days: 7))
-        : DateTime.now().toUtc();
-    final weekStart = serverNow.subtract(Duration(days: serverNow.weekday - 1));
-    final weekEnd = weekStart.add(const Duration(days: 7));
+    final nextBillingDate = _coerceDateString(
+      policy['nextBillingDate'],
+      fallback: _fallbackNextBillingDateString(),
+    );
+    final cycleStartDate = _coerceDateString(
+      policy['cycleStartDate'],
+      fallback: _shiftDateString(nextBillingDate, days: -7),
+    );
+    final cycleEndDate = _coerceDateString(
+      policy['cycleEndDate'],
+      fallback: nextBillingDate,
+    );
+    final backendStatus = _coerceText(policy['status'], fallback: '').toLowerCase();
+    final pendingEffectiveDate = _coerceText(policy['pendingEffectiveDate']);
+    final policyStatus = _coerceText(policy['status'], fallback: 'inactive').toLowerCase();
+    final inferredScheduled = pendingEffectiveDate.isNotEmpty &&
+      DateTime.tryParse(pendingEffectiveDate)?.toUtc().isAfter(DateTime.now().toUtc()) == true;
+    final isScheduled = backendStatus.isEmpty
+      ? inferredScheduled
+      : backendStatus != 'active';
+    final daysLeft = (policy['daysLeft'] as num?)?.toInt();
+    final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num?)?.toDouble();
 
     final claimsThisWeek = claims.where((claim) {
-      final claimDate = claim.date.toUtc();
-      return !claimDate.isBefore(weekStart) && claimDate.isBefore(weekEnd);
+      return claim.status == ClaimStatus.settled;
     }).toList();
 
     final claimsProcessedThisWeek = claimsThisWeek.length;
@@ -66,16 +103,11 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
-    final daysUntilBilling = nextBillingDate != null
-        ? nextBillingDate.toUtc().difference(serverNow).inDays.clamp(0, 7)
-        : 7;
-    final coveredDaysLeft = (maxDaysPerWeek - claimsProcessedThisWeek)
-        .clamp(0, maxDaysPerWeek)
-        .clamp(0, daysUntilBilling);
+    final coveredDaysLeft = daysLeft ?? (maxDaysPerWeek - claimsProcessedThisWeek).clamp(0, maxDaysPerWeek);
 
     final activePlan = InsurancePlan(
       name: (policy['plan'] as String? ?? user.plan).trim(),
-      weeklyPremium: (policy['weeklyPremium'] as num? ?? 0).toInt(),
+      weeklyPremium: (amountPaidThisWeek ?? (policy['weeklyPremium'] as num? ?? 0).toDouble()).toInt(),
       perTriggerPayout: (policy['perTriggerPayout'] as num? ?? 0).toInt(),
       maxDaysPerWeek: (policy['maxDaysPerWeek'] as num? ?? 0).toInt(),
       isPopular: false,
@@ -94,6 +126,13 @@ class HomeScreen extends StatelessWidget {
               .where((claim) => claim.status == ClaimStatus.settled)
               .fold<double>(0, (sum, claim) => sum + claim.amount),
       coveredDaysLeft: coveredDaysLeft,
+      cycleStartDate: cycleStartDate,
+      cycleEndDate: cycleEndDate,
+      pendingEffectiveDate: pendingEffectiveDate,
+      isScheduled: isScheduled,
+      policyStatus: policyStatus,
+      zoneLabel: policyZone,
+      platformLabel: policyPlatform,
       claimsProcessedThisWeek: claimsProcessedThisWeek,
       payoutThisWeek: payoutThisWeek,
     );
@@ -264,8 +303,6 @@ class HomeScreen extends StatelessWidget {
   Widget _buildWithData(BuildContext context, _HomeViewData data) {
     final user = data.user;
     final activePlan = data.activePlan;
-    final cycleStart = DateTime.now();
-    final cycleEnd = cycleStart.add(const Duration(days: 7));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -301,9 +338,16 @@ class HomeScreen extends StatelessWidget {
                     context,
                     user,
                     activePlan,
-                    cycleStart,
-                    cycleEnd,
+                    data.cycleStartDate,
+                    data.cycleEndDate,
+                    isScheduled: data.isScheduled,
+                    zoneLabel: data.zoneLabel,
+                    platformLabel: data.platformLabel,
                   ),
+                  if (data.policyStatus == 'inactive') ...[
+                    const SizedBox(height: 10),
+                    _buildPaymentDuePrompt(context),
+                  ],
                   const SizedBox(height: 14),
                   _buildTodaysUpdatesSnapshot(data.latestClaim),
                   const SizedBox(height: 24),
@@ -332,8 +376,11 @@ class HomeScreen extends StatelessWidget {
     BuildContext context,
     User user,
     InsurancePlan activePlan,
-    DateTime cycleStart,
-    DateTime cycleEnd,
+    String cycleStartDate,
+    String cycleEndDate,
+    {
+    required bool isScheduled,
+  }
   ) {
     return SafeArea(
       child: Padding(
@@ -347,8 +394,11 @@ class HomeScreen extends StatelessWidget {
               context,
               user,
               activePlan,
-              cycleStart,
-              cycleEnd,
+              cycleStartDate,
+              cycleEndDate,
+              isScheduled: isScheduled,
+              zoneLabel: _coerceText(user.zone),
+              platformLabel: _coerceText(user.platform),
             ),
           ],
         ),
@@ -564,9 +614,7 @@ class HomeScreen extends StatelessWidget {
                 title: const Text('Settings'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Settings screen coming soon.')),
-                  );
+                  _openProfile(context);
                 },
               ),
               ListTile(
@@ -630,17 +678,18 @@ class HomeScreen extends StatelessWidget {
     BuildContext context,
     User user,
     InsurancePlan activePlan,
-    DateTime cycleStart,
-    DateTime cycleEnd,
+    String cycleStartDate,
+    String cycleEndDate,
+    {
+    required bool isScheduled,
+    required String zoneLabel,
+    required String platformLabel,
+  }
   ) {
-    final dateRange =
-        '${DateFormat('MMM d').format(cycleStart)} → ${DateFormat('MMM d, y').format(cycleEnd)}';
+    final startLabel = _formatDateLabel(cycleStartDate);
+    final endLabel = _formatDateLabel(cycleEndDate);
     final planTitle =
         activePlan.name.trim().isEmpty ? 'Standard' : activePlan.name.trim();
-    final zonePincode = user.zonePincode.trim();
-    final platformZone = zonePincode.isEmpty
-      ? '${user.platform} · ${user.zone}'
-      : '${user.platform} · ${user.zone} · $zonePincode';
 
     return Container(
       width: double.infinity,
@@ -651,16 +700,16 @@ class HomeScreen extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF1BAA80),
-            Color(0xFF0E6E56),
-            Color(0xFF09503E),
+            Color(0xFF14B890),
+            Color(0xFF109072),
+            Color(0xFF0F7E66),
           ],
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "Active" badge – top right with a pulsing green dot.
+          // Status badge – active when live, scheduled when the next cycle is pending.
           Align(
             alignment: Alignment.centerRight,
             child: Container(
@@ -678,14 +727,14 @@ class HomeScreen extends StatelessWidget {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF6EFFC2),
+                    decoration: BoxDecoration(
+                      color: isScheduled ? AppColors.error : const Color(0xFF6EFFC2),
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 5),
-                  const Text(
-                    'Active',
+                  Text(
+                    isScheduled ? 'Inactive' : 'Active',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -699,7 +748,7 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Current plan',
+            isScheduled ? 'Scheduled plan' : 'Current plan',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -718,49 +767,15 @@ class HomeScreen extends StatelessWidget {
               height: 1.0,
             ),
           ),
-          const SizedBox(height: 14),
-          // Date and zone on a single row separated by a vertical divider.
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: Colors.white.withValues(alpha: 0.75),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                dateRange,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.white.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 1,
-                height: 12,
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-              const SizedBox(width: 10),
-              Icon(
-                Icons.wb_sunny_outlined,
-                size: 14,
-                color: Colors.white.withValues(alpha: 0.75),
-              ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  platformZone,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 6),
+          Text(
+            isScheduled ? 'Coverage starts with the next weekly cycle.' : 'Coverage is live for the current weekly cycle.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w500,
+              height: 1.2,
+            ),
           ),
           const SizedBox(height: 18),
           // Buttons – ghost "View Details" and solid white "File a Claim".
@@ -770,7 +785,13 @@ class HomeScreen extends StatelessWidget {
                 child: SizedBox(
                   height: 46,
                   child: OutlinedButton.icon(
-                    onPressed: () => _openCoverage(context),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const CoverageStatusScreen(),
+                        ),
+                      );
+                    },
                     icon: const Icon(Icons.description_outlined, size: 16),
                     label: const Text('View Details'),
                     style: OutlinedButton.styleFrom(
@@ -823,6 +844,79 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildPaymentDuePrompt(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.payment_rounded, color: AppColors.warning, size: 20),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Payment due for the upcoming weekly cycle. Complete payment to activate cover.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const CoverageStatusScreen(),
+                ),
+              );
+            },
+            child: const Text('Details'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _coerceDateString(Object? value, {Object? fallback}) {
+    final primary = value?.toString().trim() ?? '';
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+    final secondary = fallback?.toString().trim() ?? '';
+    return secondary;
+  }
+
+  String _coerceText(Object? value, {String fallback = ''}) {
+    final parsed = value?.toString().trim() ?? '';
+    return parsed.isEmpty ? fallback : parsed;
+  }
+
+  String _shiftDateString(String value, {required int days}) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) {
+      return value;
+    }
+    return parsed.toUtc().add(Duration(days: days)).toIso8601String();
+  }
+
+  String _fallbackNextBillingDateString() {
+    return DateTime.now().toUtc().add(const Duration(days: 7)).toIso8601String();
+  }
+
+  String _formatDateLabel(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) {
+      return value.isEmpty ? 'Not set' : value;
+    }
+    return DateFormat('MMM d, y').format(parsed.toLocal());
   }
 
   // ─── Today's updates ──────────────────────────────────────────────────────
@@ -1435,6 +1529,18 @@ class HomeScreen extends StatelessWidget {
   void _openProfile(BuildContext context) => _switchToTab(context, 4);
   void _openPayouts(BuildContext context) => _switchToTab(context, 3);
 
+  Future<void> _copySupportValue(
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copied: $value')),
+    );
+  }
+
   void _switchToTab(BuildContext context, int index) {
     TabRouter.switchTo(index);
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -1547,8 +1653,10 @@ class HomeScreen extends StatelessWidget {
                   subtitle: const Text('+91 1800 00 0000'),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Calling support is coming soon.')),
+                    _copySupportValue(
+                      context,
+                      label: 'Support helpline',
+                      value: '+91 1800 00 0000',
                     );
                   },
                 ),
@@ -1556,11 +1664,13 @@ class HomeScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.chat_outlined),
                   title: const Text('Chat with us'),
-                  subtitle: const Text('Average wait: under 2 min'),
+                  subtitle: const Text('support@saatdin.in'),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Live chat will be available soon.')),
+                    _copySupportValue(
+                      context,
+                      label: 'Support email',
+                      value: 'support@saatdin.in',
                     );
                   },
                 ),
@@ -2085,6 +2195,13 @@ class _HomeViewData {
     required this.earningsProtected,
     required this.totalEarnings,
     required this.coveredDaysLeft,
+    required this.cycleStartDate,
+    required this.cycleEndDate,
+    required this.pendingEffectiveDate,
+    required this.isScheduled,
+    required this.policyStatus,
+    required this.zoneLabel,
+    required this.platformLabel,
     required this.claimsProcessedThisWeek,
     required this.payoutThisWeek,
   });
@@ -2097,6 +2214,13 @@ class _HomeViewData {
   final double earningsProtected;
   final double? totalEarnings;
   final int coveredDaysLeft;
+  final String cycleStartDate;
+  final String cycleEndDate;
+  final String pendingEffectiveDate;
+  final bool isScheduled;
+  final String policyStatus;
+  final String zoneLabel;
+  final String platformLabel;
   final int claimsProcessedThisWeek;
   final double payoutThisWeek;
 }

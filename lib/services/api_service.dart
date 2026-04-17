@@ -21,29 +21,41 @@ class WorkerStatus {
 
 class ApiService {
   static String get baseUrl => _candidateBaseUrls.first;
+  static String? _preferredBaseUrl;
+  static const String _baseUrlStorageKey = 'saatdin_api_base_url';
   static List<String> get _candidateBaseUrls {
     const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
     if (configuredBaseUrl.isNotEmpty) {
       return [configuredBaseUrl];
     }
 
+    List<String> defaults;
+
     if (kIsWeb) {
-      return const [
+      defaults = const [
+        'http://localhost:8000/api/v1',
+        'http://localhost:8005/api/v1',
+      ];
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      defaults = const [
+        'http://10.0.2.2:8000/api/v1',
+        'http://10.0.2.2:8005/api/v1',
+      ];
+    } else {
+      defaults = const [
         'http://localhost:8000/api/v1',
         'http://localhost:8005/api/v1',
       ];
     }
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return const [
-        'http://10.0.2.2:8000/api/v1',
-        'http://10.0.2.2:8005/api/v1',
-      ];
+    final preferred = _preferredBaseUrl?.trim();
+    if (preferred == null || preferred.isEmpty) {
+      return defaults;
     }
 
-    return const [
-      'http://localhost:8000/api/v1',
-      'http://localhost:8005/api/v1',
+    return [
+      preferred,
+      ...defaults.where((candidate) => candidate != preferred),
     ];
   }
   static final ZoneRiskService _zoneRiskService = ZoneRiskService();
@@ -96,8 +108,12 @@ class ApiService {
   Future<void> initializeSession() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenStorageKey)?.trim();
+    final preferredBaseUrl = prefs.getString(_baseUrlStorageKey)?.trim();
     if (token != null && token.isNotEmpty) {
       _accessToken = token;
+    }
+    if (preferredBaseUrl != null && preferredBaseUrl.isNotEmpty) {
+      _preferredBaseUrl = preferredBaseUrl;
     }
     _sessionInitialized = true;
   }
@@ -115,6 +131,11 @@ class ApiService {
   Future<void> _persistSessionToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenStorageKey, token);
+  }
+
+  Future<void> _persistPreferredBaseUrl(String baseUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_baseUrlStorageKey, baseUrl);
   }
 
   Future<void> clearSession() async {
@@ -154,6 +175,8 @@ class ApiService {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           if (data['success'] == true) {
+            _preferredBaseUrl = candidate;
+            await _persistPreferredBaseUrl(candidate);
             return true;
           }
           errors.add(_messageFromBody(data, fallback: 'OTP send failed.'));
@@ -198,7 +221,9 @@ class ApiService {
           final payload = _extractData(data) as Map<String, dynamic>?;
           final token = (payload?['token'] as String?)?.trim();
           if (token != null && token.isNotEmpty) {
+            _preferredBaseUrl = candidate;
             _accessToken = token;
+            await _persistPreferredBaseUrl(candidate);
             await _persistSessionToken(token);
             return true;
           }
@@ -466,6 +491,50 @@ class ApiService {
     }
   }
 
+  /// POST /policy/premium-payment
+  Future<Map<String, dynamic>> recordPremiumPayment({
+    required double amount,
+    String status = 'paid',
+    String? weekStartDate,
+    String? providerRef,
+    Map<String, dynamic>? metadata,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/policy/premium-payment');
+      final payload = <String, dynamic>{
+        'amount': amount,
+        'status': status,
+        if (weekStartDate != null && weekStartDate.trim().isNotEmpty)
+          'weekStartDate': weekStartDate.trim(),
+        if (providerRef != null && providerRef.trim().isNotEmpty)
+          'providerRef': providerRef.trim(),
+        if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
+      };
+
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(authorized: true),
+            body: jsonEncode(payload),
+          )
+          .timeout(_timeout);
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final result = _extractData(body) as Map<String, dynamic>?;
+        if (result != null) return result;
+      }
+      throw Exception(_messageFromBody(body, fallback: 'Failed to record premium payment.'));
+    } catch (_) {
+      rethrow;
+    }
+  }
+
   // ── Claims ────────────────────────────────────────
 
   String _claimTypeToApi(ClaimType type) {
@@ -508,6 +577,9 @@ class ApiService {
       case 'in_review':
       case 'inreview':
         return ClaimStatus.inReview;
+      case 'escalated':
+        return ClaimStatus.escalated;
+      case 'approved':
       case 'settled':
         return ClaimStatus.settled;
       case 'rejected':
@@ -622,6 +694,188 @@ class ApiService {
     }
   }
 
+  int _claimNumericId(String claimId) {
+    final normalized = claimId.replaceAll('#', '').replaceAll('C', '');
+    final parsed = int.tryParse(normalized);
+    if (parsed == null || parsed <= 0) {
+      throw Exception('Invalid claim id: $claimId');
+    }
+    return parsed;
+  }
+
+  Future<Map<String, dynamic>> submitZoneLockReport({
+    required String description,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/triggers/zonelock/report');
+    final response = await http
+        .post(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode({'description': description}),
+        )
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to submit ZoneLock report.'));
+  }
+
+  Future<Map<String, dynamic>> escalateClaim({
+    required String claimId,
+    required String reason,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final numericId = _claimNumericId(claimId);
+    final uri = Uri.parse('$baseUrl/claims/$numericId/escalate');
+    final response = await http
+        .post(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to escalate claim.'));
+  }
+
+  Future<Map<String, dynamic>> getPayoutDashboard() async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/payouts/me');
+    final response = await http
+        .get(uri, headers: _headers(authorized: true))
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to fetch payout dashboard.'));
+  }
+
+  Future<Map<String, dynamic>> updatePayoutAccount({
+    required String slot,
+    required String upiId,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/payouts/accounts/$slot');
+    final response = await http
+        .put(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode({'upiId': upiId}),
+        )
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to update payout account.'));
+  }
+
+  Future<Map<String, dynamic>> verifyPayoutAccount(String slot) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/payouts/accounts/$slot/verify');
+    final response = await http
+        .post(uri, headers: _headers(authorized: true))
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to verify payout account.'));
+  }
+
+  Future<Map<String, dynamic>> getPayoutStatement({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/payouts/statements').replace(
+      queryParameters: {
+        'startDate': startDate.toIso8601String().substring(0, 10),
+        'endDate': endDate.toIso8601String().substring(0, 10),
+      },
+    );
+    final response = await http
+        .get(uri, headers: _headers(authorized: true))
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to fetch payout statement.'));
+  }
+
+  Future<Map<String, dynamic>> uploadLocationSignal({
+    double? latitude,
+    double? longitude,
+    double? accuracyMeters,
+    DateTime? capturedAt,
+    Map<String, dynamic>? towerMetadata,
+    Map<String, dynamic>? motionMetadata,
+  }) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/workers/location-signal');
+    final response = await http
+        .post(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode({
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
+            if (accuracyMeters != null) 'accuracyMeters': accuracyMeters,
+            if (capturedAt != null) 'capturedAt': capturedAt.toUtc().toIso8601String(),
+            if (towerMetadata != null) 'towerMetadata': towerMetadata,
+            if (motionMetadata != null) 'motionMetadata': motionMetadata,
+          }),
+        )
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) return payload;
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to upload location signal.'));
+  }
+
   // ── Profile ───────────────────────────────────────
 
   /// GET /workers/me
@@ -691,11 +945,29 @@ class ApiService {
     return const WorkerStatus(phone: '', exists: false, worker: null);
   }
 
-  /// PUT /profile/{userId}
+  /// PUT /workers/me
   Future<User> updateProfile(String userId, Map<String, dynamic> data) async {
-    // TODO: Connect to FastAPI
-    await Future.delayed(const Duration(milliseconds: 500));
-    return User.getMockUser();
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse('$baseUrl/workers/me');
+    final response = await http
+        .put(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode(data),
+        )
+        .timeout(_timeout);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      final payload = _extractData(body) as Map<String, dynamic>?;
+      if (payload != null) {
+        return User.fromJson(payload);
+      }
+    }
+    throw Exception(_messageFromBody(body, fallback: 'Failed to update profile.'));
   }
 
   // ── Triggers / Risk ───────────────────────────────

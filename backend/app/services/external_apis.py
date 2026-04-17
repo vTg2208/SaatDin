@@ -8,6 +8,12 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from ..core.config import settings
+from .zonelock_nlp import classify_disruption_text
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # type: ignore
 
 try:
     import aiohttp
@@ -40,7 +46,7 @@ class ExternalAPIClient:
     """Client for fetching real-time disruption data from public APIs."""
 
     def __init__(self):
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[Any] = None
         self._aiohttp_available = aiohttp is not None
 
     async def initialize(self):
@@ -71,6 +77,51 @@ class ExternalAPIClient:
             logger.warning(f"API fetch error for {url}: {e}")
             return None
 
+    def _resolve_response_timezone(self, data: Dict[str, Any]) -> timezone:
+        tz_name = str(data.get("timezone") or "").strip()
+        if tz_name and ZoneInfo is not None:
+            try:
+                return ZoneInfo(tz_name)  # type: ignore[return-value]
+            except Exception as exc:
+                logger.warning("api_timezone_fallback_applied reason=invalid_zoneinfo timezone=%s error=%s", tz_name, str(exc))
+
+        offset_seconds = data.get("utc_offset_seconds")
+        if isinstance(offset_seconds, (int, float)):
+            try:
+                return timezone(timedelta(seconds=int(offset_seconds)))
+            except Exception as exc:
+                logger.warning(
+                    "api_timezone_fallback_applied reason=invalid_offset offset_seconds=%s error=%s",
+                    str(offset_seconds),
+                    str(exc),
+                )
+
+        if tz_name or offset_seconds is not None:
+            logger.info("api_timezone_fallback_applied reason=default_utc timezone=%s offset_seconds=%s", tz_name, str(offset_seconds))
+        return timezone.utc
+
+    def _parse_open_meteo_time(self, raw_time: Any, response_tz: timezone) -> Optional[datetime]:
+        if not isinstance(raw_time, str) or not raw_time.strip():
+            return None
+
+        value = raw_time.strip()
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            # Open-Meteo usually returns ISO timestamps, but keep a strict fallback for unexpected formats.
+            for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+                try:
+                    parsed = datetime.strptime(value, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return None
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=response_tz)
+        return parsed
+
     async def get_rainfall_data(self, latitude: float, longitude: float) -> Optional[float]:
         """
         Fetch rainfall data from Open-Meteo.
@@ -80,6 +131,7 @@ class ExternalAPIClient:
             params = {
                 "latitude": latitude,
                 "longitude": longitude,
+                "hourly": "precipitation",
                 "precipitation_unit": "mm",
                 "timezone": "Asia/Kolkata",
                 "past_days": 1,
@@ -95,15 +147,18 @@ class ExternalAPIClient:
 
             times = hourly["time"]
             precip = hourly["precipitation"]
+            response_tz = self._resolve_response_timezone(data)
 
             # Find current time and sum last 3 hours
-            now = datetime.now(timezone.utc)
+            now = datetime.now(response_tz)
             three_hours_ago = now - timedelta(hours=3)
 
             total_rainfall = 0.0
             for i, time_str in enumerate(times):
                 try:
-                    time_obj = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                    time_obj = self._parse_open_meteo_time(time_str, response_tz)
+                    if time_obj is None:
+                        continue
                     if three_hours_ago <= time_obj <= now:
                         total_rainfall += float(precip[i]) if precip[i] else 0.0
                 except (ValueError, IndexError):
@@ -202,27 +257,46 @@ class ExternalAPIClient:
                 logger.debug("NEWS_API_KEY not configured, skipping disruption news fetch")
                 return None
 
-            params = {
-                "q": f"{zone_name} OR {pincode} (curfew OR bandh OR strike OR disruption)",
-                "sortBy": "publishedAt",
-                "language": "en",
-                "apiKey": settings.news_api_key,
-            }
-            data = await self._fetch_json(NEWS_API_BASE, params)
+            query_candidates = [
+                # Location-first query: let NLP decide disruption semantics.
+                f'"{zone_name}" OR "{pincode}"',
+                # Broader fallback in case OR parsing is inconsistent.
+                f"{zone_name} {pincode}",
+            ]
 
-            if not data or data.get("articles") is None or len(data["articles"]) == 0:
+            articles = []
+            for query in query_candidates:
+                params = {
+                    "q": query,
+                    "sortBy": "publishedAt",
+                    "language": "en",
+                    "apiKey": settings.news_api_key,
+                }
+                data = await self._fetch_json(NEWS_API_BASE, params)
+                candidate_articles = data.get("articles") if data else None
+                if isinstance(candidate_articles, list) and candidate_articles:
+                    articles = candidate_articles
+                    break
+
+            if not articles:
                 return None
 
-            # Check first article for disruption keywords
-            first_article = data["articles"][0]
-            title = str(first_article.get("title", "")).lower()
-            description = str(first_article.get("description", "")).lower()
-            content = f"{title} {description}"
+            best_match = None
+            best_confidence = 0.0
+            for article in articles[:8]:
+                title = str(article.get("title", "")).strip()
+                description = str(article.get("description", "")).strip()
+                content = f"{zone_name} {pincode} {title} {description}"
+                classified = classify_disruption_text(content)
+                if not classified:
+                    continue
+                confidence = float(classified.get("confidence", 0.0))
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_match = str(classified.get("category"))
 
-            disruption_keywords = ["curfew", "bandh", "strike", "shutdown", "closure", "lockdown"]
-            for keyword in disruption_keywords:
-                if keyword in content:
-                    return keyword
+            if best_match:
+                return best_match
 
             return None
         except Exception as e:

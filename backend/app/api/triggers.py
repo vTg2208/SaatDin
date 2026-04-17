@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 
@@ -16,7 +17,14 @@ from ..models.schemas import (
     ZoneLockReportOut,
 )
 from ..services.trigger_monitor import get_live_trigger_state, force_trigger_for_zone
-from ..core.db import create_zonelock_report, list_zonelock_reports_for_zone, increment_zonelock_report_verification
+from ..services.zonelock_nlp import classify_disruption_text, disruption_similarity
+from ..core.db import (
+    create_zonelock_report,
+    get_zonelock_report,
+    increment_zonelock_report_verification,
+    list_zonelock_reports_for_zone,
+    mark_zonelock_reports_auto_claimed,
+)
 
 router = APIRouter(tags=["triggers"])
 logger = logging.getLogger(__name__)
@@ -121,36 +129,79 @@ async def report_zonelock(
     phone = str(worker.get("phone"))
     zone_pincode = str(worker.get("zone_pincode"))
     zone_name = str(worker.get("zone_name"))
+    classified = classify_disruption_text(str(req.description))
+    normalized_keywords = classified["keywords"] if classified else []
+    disruption_label = classified["category"] if classified else "reported disruption"
 
-    # Create report
     report = await create_zonelock_report(
         phone=phone,
         zone_pincode=zone_pincode,
         zone_name=zone_name,
         description=str(req.description),
+        normalized_keywords=normalized_keywords,
     )
 
-    # Check if similar reports exist in past 30 minutes
     recent_reports = await list_zonelock_reports_for_zone(zone_pincode)
-    from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(minutes=30)).isoformat()
 
-    similar_count = sum(
-        1 for r in recent_reports
-        if r["id"] != report["id"] and r["created_at"] >= cutoff
-    )
+    corroborating_reports = []
+    for existing in recent_reports:
+        if int(existing["id"]) == int(report["id"]):
+            continue
+        if str(existing["created_at"]) < cutoff:
+            continue
+        if str(existing.get("phone")) == phone:
+            continue
+        existing_keywords = []
+        raw_keywords = existing.get("normalized_keywords")
+        if isinstance(raw_keywords, str) and raw_keywords.strip():
+            import json
 
-    if similar_count >= 1:
-        # Auto-confirm: 2 or more independent reports
+            try:
+                parsed = json.loads(raw_keywords)
+            except json.JSONDecodeError:
+                parsed = []
+            if isinstance(parsed, list):
+                existing_keywords = [str(item) for item in parsed]
+        elif isinstance(raw_keywords, list):
+            existing_keywords = [str(item) for item in raw_keywords]
+
+        similarity = disruption_similarity(normalized_keywords, existing_keywords)
+        if similarity >= 0.3 or not normalized_keywords:
+            corroborating_reports.append(existing)
+
+    if corroborating_reports:
         await increment_zonelock_report_verification(report["id"])
-        logger.info(
-            f"zonelock_auto_confirmed report_id={report['id']} phone={phone} zone={zone_pincode} similar_reports={similar_count + 1}"
+        report = await get_zonelock_report(int(report["id"])) or report
+        report_ids = [int(report["id"]), *[int(item["id"]) for item in corroborating_reports]]
+        await mark_zonelock_reports_auto_claimed(report_ids)
+        report["status"] = "auto_confirmed"
+        report["verified_count"] = len(corroborating_reports) + 1
+        report["confidence"] = max(float(report.get("confidence", 0.4)), 0.8)
+        trigger_result = await force_trigger_for_zone(
+            zone_key=zone_pincode,
+            claim_type="ZoneLock",
+            alert_title=f"ZoneLock: {str(disruption_label).title()} confirmed",
+            alert_description=f"Multiple worker reports confirmed a {disruption_label} event in {zone_name}.",
+            confidence=max(0.8, float(classified["confidence"])) if classified else 0.8,
+            source="worker-reports",
         )
-        # TODO: Trigger auto-claims for all workers in zone
+        logger.info(
+            "zonelock_auto_confirmed report_id=%s phone=%s zone=%s corroborating_reports=%s auto_claims=%s",
+            report["id"],
+            phone,
+            zone_pincode,
+            len(corroborating_reports) + 1,
+            trigger_result.get("autoClaimsCreated", 0),
+        )
     else:
         logger.info(
-            f"zonelock_report_created report_id={report['id']} phone={phone} zone={zone_pincode} status=pending_review"
+            "zonelock_report_created report_id=%s phone=%s zone=%s status=pending_review keywords=%s",
+            report["id"],
+            phone,
+            zone_pincode,
+            ",".join(normalized_keywords),
         )
 
     return ApiResponse(

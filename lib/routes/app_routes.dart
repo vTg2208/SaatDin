@@ -8,6 +8,9 @@ import '../screens/onboarding/name_input_screen.dart';
 import '../screens/onboarding/platform_selection_screen.dart';
 import '../screens/onboarding/zone_selection_screen.dart';
 import '../screens/onboarding/plan_selection_screen.dart';
+import '../screens/onboarding/payment/payment_confirm_screen.dart';
+import '../screens/onboarding/payment/payment_method_screen.dart';
+import '../screens/onboarding/payment/payment_success_screen.dart';
 import '../screens/main_shell.dart';
 
 class AppRoutes {
@@ -22,6 +25,9 @@ class AppRoutes {
   static const String platformSelect = '/platform-select';
   static const String zoneSelect = '/zone-select';
   static const String planSelect = '/plan-select';
+  static const String paymentConfirm = '/payment-confirm';
+  static const String paymentMethod = '/payment-method';
+  static const String paymentSuccess = '/payment-success';
   static const String home = '/home';
 
   static Map<String, WidgetBuilder> get routes {
@@ -35,6 +41,9 @@ class AppRoutes {
       platformSelect: (context) => const PlatformSelectionScreen(),
       zoneSelect: (context) => const ZoneSelectionScreen(),
       planSelect: (context) => const PlanSelectionScreen(),
+      paymentConfirm: (context) => const PaymentConfirmScreen(),
+      paymentMethod: (context) => const PaymentMethodScreen(),
+      paymentSuccess: (context) => const PaymentSuccessScreen(),
       home: (context) => const MainShell(),
     };
   }
