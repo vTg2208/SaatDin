@@ -1,6 +1,6 @@
-# SaatDin Setup Guide
+﻿# SaatDin Setup Guide
 
-This guide helps you run the SaatDin project locally with both the Flutter app and the FastAPI backend.
+This guide helps you run the implemented SaatDin project locally with both the Flutter app and the FastAPI backend.
 
 ## 1. Prerequisites
 
@@ -26,6 +26,7 @@ python --version
 - Zone risk data: assets/data/zone_risk_runtime.json
 - Backend source: backend/app/main.py
 - Backend dependencies: backend/requirements.txt
+- Project story: PROJECT_INFO.md
 
 ## 3. Flutter App Setup
 
@@ -49,7 +50,7 @@ From project root, install backend dependencies:
 python -m pip install -r backend/requirements.txt
 ```
 
-Create environment config for local SQLite development:
+Create environment config for the current Supabase/Postgres-backed backend:
 
 ```powershell
 copy backend/.env.example backend/.env
@@ -58,14 +59,14 @@ copy backend/.env.example backend/.env
 Edit `backend/.env` if you want to override defaults:
 
 ```env
-DATABASE_PATH=backend/backend_data.db
+SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
 FRAUD_SCORING_ENABLED=true
 FRAUD_MODEL_PATH=backend/models/fraud/fraud_iforest_latest.joblib
 FRAUD_ANOMALY_THRESHOLD=-0.05
 FRAUD_FAIL_OPEN=true
 ```
 
-Optional: migrate existing local SQLite data into Supabase once you need a hosted database:
+Optional: migrate legacy local SQLite data into Supabase once you need a hosted database:
 
 ```powershell
 python backend/scripts/migrate_sqlite_to_supabase.py --sqlite backend/backend_data.db --supabase-db-url "postgresql://postgres:<password>@<host>:5432/postgres"
@@ -185,7 +186,8 @@ python backend/scripts/train_isolation_forest.py --output-dir backend/models/fra
 
 - Zone and risk data are currently loaded from assets/data/zone_risk_runtime.json.
 - Dynamic onboarding, claims, escalations, payouts, admin review, and mobile signal ingestion are integrated.
-- Supabase migration remains optional for hosted deployments, but it is not required for local development.
+- The live backend is Supabase/Postgres-backed; SQLite migration remains a legacy path only.
+- Archival exports move closed-week data into S3-compatible cold storage and BigQuery for historical analysis.
 
 ## 11. Co-Claim Cluster Risk Scoring (Ops)
 
@@ -258,23 +260,3 @@ SaatDin supports privacy-safe motion aggregates to distinguish genuine movement 
   - `windowSeconds`
   - `sampleCount`
   - optional aggregate metrics: `movingSeconds`, `stationarySeconds`, `distanceMeters`, `avgSpeedMps`, `maxSpeedMps`, `headingChangeRate`
-- Quality gates are configurable:
-  - `MOTION_MIN_WINDOW_SECONDS`
-  - `MOTION_MIN_SAMPLE_COUNT`
-  - `MOTION_SIGNAL_FRESHNESS_MINUTES`
-
-### Motion scoring + false-positive guardrails
-
-- Rule-based evaluator emits `match/static/mismatch/missing/stale/insufficient` with confidence.
-- Fraud contribution is bounded:
-  - `MOTION_VALIDATION_SCORE_WEIGHT`
-  - `MOTION_VALIDATION_ADJUSTMENT_CAP`
-- Missing/stale/insufficient motion data remains neutral.
-- False-positive guardrail: negative motion penalty is reduced unless corroborating risk exists (e.g. poor zone affinity or tower mismatch).
-- Motion score is advisory and does **not** auto-deny claims by itself.
-
-### Privacy retention and access policy
-
-- Only aggregate motion metrics are accepted; raw sensor traces are not stored.
-- Latest signal snapshots are retained with bounded lifecycle using `MOTION_SIGNAL_RETENTION_DAYS` cleanup.
-- Access is restricted to fraud-evaluation path and claim review metadata; no full motion analytics dashboard is part of this scope.
