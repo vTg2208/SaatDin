@@ -249,7 +249,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          _isSendingOtp ? 'Sending OTP...' : 'Continue',
+                                          _isSendingOtp ? 'Sending OTP' : 'Continue',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,

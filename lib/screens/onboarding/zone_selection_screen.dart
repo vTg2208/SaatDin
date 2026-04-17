@@ -150,14 +150,6 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
                                             color: AppColors.textPrimary,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Tier: ${zone.riskTier}  ·  Multiplier: ${zone.zoneRiskMultiplier.toStringAsFixed(2)}x',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
                                       ],
                                     ),
                                   ),

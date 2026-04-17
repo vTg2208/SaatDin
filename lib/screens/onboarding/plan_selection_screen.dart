@@ -258,7 +258,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                       ? 'No plans available'
                                       : _isProceeding
                                           ? 'Checking...'
-                                          : 'Continue to payment',
+                                          : 'Review Shield Details',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
