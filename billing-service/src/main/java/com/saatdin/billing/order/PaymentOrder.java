@@ -1,5 +1,12 @@
 package com.saatdin.billing.order;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -7,21 +14,52 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
-public final class PaymentOrder {
+@Entity
+@Table(name = "payment_orders", schema = "billing")
+public class PaymentOrder {
 
-	private final UUID id;
-	private final String workerPhone;
-	private final String planCode;
-	private final BigDecimal amount;
-	private final String currency;
-	private final LocalDate coverageWeekStart;
-	private final String provider;
-	private final String idempotencyKey;
-	private final Instant expiresAt;
-	private final Instant createdAt;
+	@Id
+	private UUID id;
+
+	@Column(name = "worker_phone", nullable = false, length = 15)
+	private String workerPhone;
+
+	@Column(name = "plan_code", nullable = false, length = 40)
+	private String planCode;
+
+	@Column(nullable = false, precision = 12, scale = 2)
+	private BigDecimal amount;
+
+	@Column(nullable = false, length = 3)
+	private String currency;
+
+	@Column(name = "coverage_week_start", nullable = false)
+	private LocalDate coverageWeekStart;
+
+	@Column(nullable = false, length = 40)
+	private String provider;
+
+	@Column(name = "idempotency_key", nullable = false, length = 120, unique = true)
+	private String idempotencyKey;
+
+	@Column(name = "expires_at", nullable = false)
+	private Instant expiresAt;
+
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private Instant createdAt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 24)
 	private PaymentOrderStatus status;
+
+	@Column(name = "provider_order_id", length = 160)
 	private String providerOrderId;
+
+	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
+
+	protected PaymentOrder() {
+	}
 
 	private PaymentOrder(
 			UUID id,

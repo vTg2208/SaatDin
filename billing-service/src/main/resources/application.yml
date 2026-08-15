@@ -10,6 +10,7 @@ spring:
     password: ${BILLING_DB_PASSWORD:}
   flyway:
     enabled: true
+    create-schemas: true
     schemas: billing
     default-schema: billing
   jpa:
