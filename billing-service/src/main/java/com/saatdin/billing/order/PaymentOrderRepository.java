@@ -12,6 +12,9 @@ import jakarta.persistence.LockModeType;
 
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, UUID> {
 
+	@Query(value = "select pg_advisory_xact_lock(hashtextextended(:key, 0))", nativeQuery = true)
+	void acquireIdempotencyLock(@Param("key") String idempotencyKey);
+
 	Optional<PaymentOrder> findByIdempotencyKey(String idempotencyKey);
 
 	Optional<PaymentOrder> findByIdAndWorkerPhone(UUID id, String workerPhone);
