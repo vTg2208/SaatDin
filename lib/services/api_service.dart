@@ -145,13 +145,21 @@ class ApiService implements PaymentOrderApi {
   }
 
   Future<void> _persistSessionToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenStorageKey, token);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenStorageKey, token);
+    } catch (_) {
+      // Authentication remains usable in memory when browser storage is blocked.
+    }
   }
 
   Future<void> _persistPreferredBaseUrl(String baseUrl) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_baseUrlStorageKey, baseUrl);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_baseUrlStorageKey, baseUrl);
+    } catch (_) {
+      // Endpoint discovery must not turn a successful request into a failure.
+    }
   }
 
   Future<void> clearSession() async {
