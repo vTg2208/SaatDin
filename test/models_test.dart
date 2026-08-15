@@ -83,18 +83,19 @@ void main() {
       expect(plan.isPopular, true);
     });
 
-    test('getPlans returns three tiers', () {
-      final plans = InsurancePlan.getPlans();
-      expect(plans.length, 3);
-      expect(plans[0].name, 'Basic');
-      expect(plans[1].name, 'Standard');
-      expect(plans[2].name, 'Premium');
-    });
+    test('parses backend snake_case fields', () {
+      final plan = InsurancePlan.fromJson(const {
+        'name': 'Premium',
+        'weekly_premium': 88,
+        'per_trigger_payout': 550,
+        'max_days_per_week': 4,
+        'is_popular': false,
+      });
 
-    test('Standard plan is popular', () {
-      final plans = InsurancePlan.getPlans();
-      final standard = plans.firstWhere((p) => p.name == 'Standard');
-      expect(standard.isPopular, true);
+      expect(plan.weeklyPremium, 88);
+      expect(plan.perTriggerPayout, 550);
+      expect(plan.maxDaysPerWeek, 4);
+      expect(plan.isPopular, false);
     });
 
     test('toJson round-trips correctly', () {

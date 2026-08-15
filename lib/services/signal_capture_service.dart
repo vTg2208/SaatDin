@@ -33,7 +33,9 @@ class SignalCaptureService with WidgetsBindingObserver {
       final magnitude = math.sqrt(
         (event.x * event.x) + (event.y * event.y) + (event.z * event.z),
       );
-      _samples.add(_MotionSample(timestamp: DateTime.now(), magnitude: magnitude));
+      _samples.add(
+        _MotionSample(timestamp: DateTime.now(), magnitude: magnitude),
+      );
       final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
       _samples.removeWhere((sample) => sample.timestamp.isBefore(cutoff));
     });
@@ -62,7 +64,8 @@ class SignalCaptureService with WidgetsBindingObserver {
         unawaited(_captureAndUpload());
       });
       unawaited(_captureAndUpload());
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _timer?.cancel();
       _timer = null;
     }
@@ -76,9 +79,12 @@ class SignalCaptureService with WidgetsBindingObserver {
       if (!permission) return;
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
       );
-      final rawTowerMetadata = await MobileSignalBridge.instance.getTowerMetadata();
+      final rawTowerMetadata = await MobileSignalBridge.instance
+          .getTowerMetadata();
       final connectivityResult = await _connectivity.checkConnectivity();
       final motionMetadata = _buildMotionMetadata(position);
       final enrichedTower = _buildTowerMetadata(
@@ -114,15 +120,20 @@ class SignalCaptureService with WidgetsBindingObserver {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    return permission == LocationPermission.whileInUse || permission == LocationPermission.always;
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
   }
 
   Map<String, dynamic> _buildMotionMetadata(Position position) {
     final now = DateTime.now();
     final cutoff = now.subtract(const Duration(minutes: 2));
-    final recentSamples = _samples.where((sample) => sample.timestamp.isAfter(cutoff)).toList();
+    final recentSamples = _samples
+        .where((sample) => sample.timestamp.isAfter(cutoff))
+        .toList();
     final sampleCount = recentSamples.isEmpty ? 1 : recentSamples.length;
-    final movingSamples = recentSamples.where((sample) => sample.magnitude > 11.4).length;
+    final movingSamples = recentSamples
+        .where((sample) => sample.magnitude > 11.4)
+        .length;
     final stationarySamples = sampleCount - movingSamples;
     final elapsedSinceLastUpload = _lastUploadAt == null
         ? 120.0
@@ -170,7 +181,8 @@ class SignalCaptureService with WidgetsBindingObserver {
     final metadata = <String, dynamic>{
       if (raw?['transport'] != null) 'transport': raw!['transport'],
       if (raw?['carrier'] != null) 'carrier': raw!['carrier'],
-      if (raw?['networkOperator'] != null) 'networkOperator': raw!['networkOperator'],
+      if (raw?['networkOperator'] != null)
+        'networkOperator': raw!['networkOperator'],
       if (raw?['simOperator'] != null) 'simOperator': raw!['simOperator'],
       if (raw?['capturedAtMs'] != null) 'capturedAtMs': raw!['capturedAtMs'],
       if (networkTypes.isNotEmpty) 'networkTypes': networkTypes,
@@ -220,7 +232,9 @@ class SignalCaptureService with WidgetsBindingObserver {
     if (mnc != null) normalized['mnc'] = mnc;
     if (tac != null) normalized['tac'] = tac;
     if (rawCell['dbm'] is num) normalized['signalDbm'] = rawCell['dbm'];
-    if (rawCell['signalLevel'] is num) normalized['signalLevel'] = rawCell['signalLevel'];
+    if (rawCell['signalLevel'] is num) {
+      normalized['signalLevel'] = rawCell['signalLevel'];
+    }
 
     return normalized;
   }

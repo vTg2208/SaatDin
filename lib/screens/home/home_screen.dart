@@ -39,10 +39,15 @@ class HomeScreen extends StatelessWidget {
     }
 
     final latestClaim = _latestClaimForUpdates(claims);
-    final perTriggerPayout = (policy['perTriggerPayout'] as num? ?? 0).toDouble();
-    final zoneKey = (policy['zonePincode'] as String? ?? user.zonePincode).trim();
+    final perTriggerPayout = (policy['perTriggerPayout'] as num? ?? 0)
+        .toDouble();
+    final zoneKey = (policy['zonePincode'] as String? ?? user.zonePincode)
+        .trim();
     final policyZone = _coerceText(policy['zone'], fallback: user.zone);
-    final policyPlatform = _coerceText(policy['platform'], fallback: user.platform);
+    final policyPlatform = _coerceText(
+      policy['platform'],
+      fallback: user.platform,
+    );
 
     final maxDaysPerWeek = (policy['maxDaysPerWeek'] as num? ?? 0).toInt();
     final nextBillingDate = _coerceDateString(
@@ -57,16 +62,27 @@ class HomeScreen extends StatelessWidget {
       policy['cycleEndDate'],
       fallback: nextBillingDate,
     );
-    final backendStatus = _coerceText(policy['status'], fallback: '').toLowerCase();
+    final backendStatus = _coerceText(
+      policy['status'],
+      fallback: '',
+    ).toLowerCase();
     final pendingEffectiveDate = _coerceText(policy['pendingEffectiveDate']);
-    final policyStatus = _coerceText(policy['status'], fallback: 'inactive').toLowerCase();
-    final inferredScheduled = pendingEffectiveDate.isNotEmpty &&
-      DateTime.tryParse(pendingEffectiveDate)?.toUtc().isAfter(DateTime.now().toUtc()) == true;
+    final policyStatus = _coerceText(
+      policy['status'],
+      fallback: 'inactive',
+    ).toLowerCase();
+    final inferredScheduled =
+        pendingEffectiveDate.isNotEmpty &&
+        DateTime.tryParse(
+              pendingEffectiveDate,
+            )?.toUtc().isAfter(DateTime.now().toUtc()) ==
+            true;
     final isScheduled = backendStatus.isEmpty
-      ? inferredScheduled
-      : backendStatus != 'active';
+        ? inferredScheduled
+        : backendStatus != 'active';
     final daysLeft = (policy['daysLeft'] as num?)?.toInt();
-    final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num?)?.toDouble();
+    final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num?)
+        ?.toDouble();
 
     final claimsThisWeek = claims.where((claim) {
       return claim.status == ClaimStatus.settled;
@@ -76,10 +92,11 @@ class HomeScreen extends StatelessWidget {
     final payoutThisWeek = claimsThisWeek
         .where((claim) => claim.status == ClaimStatus.settled)
         .fold<double>(0, (sum, claim) => sum + claim.amount);
-    final settledAutoTriggersThisWeek = claimsThisWeek
-        .where((claim) => claim.status == ClaimStatus.settled)
-        .toList()
-      ..sort((left, right) => right.date.compareTo(left.date));
+    final settledAutoTriggersThisWeek =
+        claimsThisWeek
+            .where((claim) => claim.status == ClaimStatus.settled)
+            .toList()
+          ..sort((left, right) => right.date.compareTo(left.date));
     final autoTriggerMessages = <String>[];
 
     if (claims.isNotEmpty) {
@@ -103,11 +120,16 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
-    final coveredDaysLeft = daysLeft ?? (maxDaysPerWeek - claimsProcessedThisWeek).clamp(0, maxDaysPerWeek);
+    final coveredDaysLeft =
+        daysLeft ??
+        (maxDaysPerWeek - claimsProcessedThisWeek).clamp(0, maxDaysPerWeek);
 
     final activePlan = InsurancePlan(
       name: (policy['plan'] as String? ?? user.plan).trim(),
-      weeklyPremium: (amountPaidThisWeek ?? (policy['weeklyPremium'] as num? ?? 0).toDouble()).toInt(),
+      weeklyPremium:
+          (amountPaidThisWeek ??
+                  (policy['weeklyPremium'] as num? ?? 0).toDouble())
+              .toInt(),
       perTriggerPayout: (policy['perTriggerPayout'] as num? ?? 0).toInt(),
       maxDaysPerWeek: (policy['maxDaysPerWeek'] as num? ?? 0).toInt(),
       isPopular: false,
@@ -123,8 +145,8 @@ class HomeScreen extends StatelessWidget {
       totalEarnings: user.totalEarnings > 0
           ? user.totalEarnings
           : claims
-              .where((claim) => claim.status == ClaimStatus.settled)
-              .fold<double>(0, (sum, claim) => sum + claim.amount),
+                .where((claim) => claim.status == ClaimStatus.settled)
+                .fold<double>(0, (sum, claim) => sum + claim.amount),
       coveredDaysLeft: coveredDaysLeft,
       cycleStartDate: cycleStartDate,
       cycleEndDate: cycleEndDate,
@@ -139,10 +161,9 @@ class HomeScreen extends StatelessWidget {
   }
 
   Claim? _latestClaimForUpdates(List<Claim> claims) {
-    final nonReviewClaims = claims
-        .where((claim) => claim.status != ClaimStatus.inReview)
-        .toList()
-      ..sort((left, right) => right.date.compareTo(left.date));
+    final nonReviewClaims =
+        claims.where((claim) => claim.status != ClaimStatus.inReview).toList()
+          ..sort((left, right) => right.date.compareTo(left.date));
 
     if (nonReviewClaims.isNotEmpty) {
       return nonReviewClaims.first;
@@ -173,7 +194,8 @@ class HomeScreen extends StatelessWidget {
     Map<String, dynamic> trigger,
     double perTriggerPayout,
   ) {
-    final triggerType = (trigger['alertType'] as String? ?? 'none').toLowerCase();
+    final triggerType = (trigger['alertType'] as String? ?? 'none')
+        .toLowerCase();
     final amount = NumberFormat('#,##0').format(perTriggerPayout);
 
     switch (triggerType) {
@@ -194,7 +216,9 @@ class HomeScreen extends StatelessWidget {
 
   // Returns the icon and background colour for a trigger message based on its type.
   // ignore: unused_element
-  ({IconData icon, Color background, Color iconColor}) _triggerIconData(String message) {
+  ({IconData icon, Color background, Color iconColor}) _triggerIconData(
+    String message,
+  ) {
     final lower = message.toLowerCase();
     if (lower.contains('rain')) {
       return (
@@ -241,8 +265,12 @@ class HomeScreen extends StatelessWidget {
     if (lower.contains('rain')) return 'Rain payout incoming';
     if (lower.contains('traffic')) return 'Traffic payout incoming';
     if (lower.contains('zone')) return 'Zone lock payout incoming';
-    if (lower.contains('aqi') || lower.contains('air')) return 'AQI payout incoming';
-    if (lower.contains('heat') || lower.contains('hot')) return 'Heat payout incoming';
+    if (lower.contains('aqi') || lower.contains('air')) {
+      return 'AQI payout incoming';
+    }
+    if (lower.contains('heat') || lower.contains('hot')) {
+      return 'Heat payout incoming';
+    }
     return 'Payout incoming';
   }
 
@@ -266,7 +294,8 @@ class HomeScreen extends StatelessWidget {
             color: AppColors.primary,
           ),
         ),
-        if (match.end < message.length) TextSpan(text: message.substring(match.end)),
+        if (match.end < message.length)
+          TextSpan(text: message.substring(match.end)),
       ],
     );
   }
@@ -377,11 +406,9 @@ class HomeScreen extends StatelessWidget {
     User user,
     InsurancePlan activePlan,
     String cycleStartDate,
-    String cycleEndDate,
-    {
+    String cycleEndDate, {
     required bool isScheduled,
-  }
-  ) {
+  }) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
@@ -434,7 +461,7 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-                _buildTodaysUpdatesSnapshot(_latestClaimForUpdates(claims)),
+              _buildTodaysUpdatesSnapshot(_latestClaimForUpdates(claims)),
               const SizedBox(height: 18),
               _buildMetricsRow(
                 user,
@@ -485,8 +512,9 @@ class HomeScreen extends StatelessWidget {
     User user,
     List<String> recentTriggers,
   ) {
-    final firstName =
-        user.name.trim().isEmpty ? 'Rider' : user.name.split(' ').first;
+    final firstName = user.name.trim().isEmpty
+        ? 'Rider'
+        : user.name.split(' ').first;
     final initials = _userInitials(user.name);
     final hasNotifications = recentTriggers.isNotEmpty;
 
@@ -636,7 +664,10 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showRecentTriggersSheet(BuildContext context, List<String> recentTriggers) {
+  void _showRecentTriggersSheet(
+    BuildContext context,
+    List<String> recentTriggers,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -661,8 +692,10 @@ class HomeScreen extends StatelessWidget {
               ...recentTriggers.map(
                 (trigger) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading:
-                      const Icon(Icons.bolt_rounded, color: AppColors.primary),
+                  leading: const Icon(
+                    Icons.bolt_rounded,
+                    color: AppColors.primary,
+                  ),
                   title: Text(trigger),
                 ),
               ),
@@ -679,17 +712,14 @@ class HomeScreen extends StatelessWidget {
     User user,
     InsurancePlan activePlan,
     String cycleStartDate,
-    String cycleEndDate,
-    {
+    String cycleEndDate, {
     required bool isScheduled,
     required String zoneLabel,
     required String platformLabel,
-  }
-  ) {
-    final startLabel = _formatDateLabel(cycleStartDate);
-    final endLabel = _formatDateLabel(cycleEndDate);
-    final planTitle =
-        activePlan.name.trim().isEmpty ? 'Standard' : activePlan.name.trim();
+  }) {
+    final planTitle = activePlan.name.trim().isEmpty
+        ? 'Standard'
+        : activePlan.name.trim();
 
     return Container(
       width: double.infinity,
@@ -699,11 +729,7 @@ class HomeScreen extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF14B890),
-            Color(0xFF109072),
-            Color(0xFF0F7E66),
-          ],
+          colors: [Color(0xFF14B890), Color(0xFF109072), Color(0xFF0F7E66)],
         ),
       ),
       child: Column(
@@ -717,9 +743,7 @@ class HomeScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.32),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -728,7 +752,9 @@ class HomeScreen extends StatelessWidget {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: isScheduled ? AppColors.error : const Color(0xFF6EFFC2),
+                      color: isScheduled
+                          ? AppColors.error
+                          : const Color(0xFF6EFFC2),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -769,7 +795,9 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            isScheduled ? 'Coverage starts with the next weekly cycle.' : 'Coverage is live for the current weekly cycle.',
+            isScheduled
+                ? 'Coverage starts with the next weekly cycle.'
+                : 'Coverage is live for the current weekly cycle.',
             style: TextStyle(
               fontSize: 13,
               color: Colors.white.withValues(alpha: 0.85),
@@ -799,7 +827,10 @@ class HomeScreen extends StatelessWidget {
                       side: BorderSide(
                         color: Colors.white.withValues(alpha: 0.4),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 0,
+                      ),
                       minimumSize: const Size(0, 44),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       shape: RoundedRectangleBorder(
@@ -825,7 +856,10 @@ class HomeScreen extends StatelessWidget {
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0E6E56),
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 0,
+                      ),
                       minimumSize: const Size(0, 44),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       shape: RoundedRectangleBorder(
@@ -908,15 +942,10 @@ class HomeScreen extends StatelessWidget {
   }
 
   String _fallbackNextBillingDateString() {
-    return DateTime.now().toUtc().add(const Duration(days: 7)).toIso8601String();
-  }
-
-  String _formatDateLabel(String value) {
-    final parsed = DateTime.tryParse(value);
-    if (parsed == null) {
-      return value.isEmpty ? 'Not set' : value;
-    }
-    return DateFormat('MMM d, y').format(parsed.toLocal());
+    return DateTime.now()
+        .toUtc()
+        .add(const Duration(days: 7))
+        .toIso8601String();
   }
 
   // ─── Today's updates ──────────────────────────────────────────────────────
@@ -995,11 +1024,7 @@ class HomeScreen extends StatelessWidget {
                     color: claim.typeColor.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    claim.typeIcon,
-                    size: 16,
-                    color: claim.typeColor,
-                  ),
+                  child: Icon(claim.typeIcon, size: 16, color: claim.typeColor),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1168,8 +1193,9 @@ class HomeScreen extends StatelessWidget {
         Expanded(
           child: _metricCard(
             title: 'Total Earnings',
-            value:
-                totalEarnings == null ? 'Not Synced' : '₹${currencyFormat.format(totalEarnings)}',
+            value: totalEarnings == null
+                ? 'Not Synced'
+                : '₹${currencyFormat.format(totalEarnings)}',
             subtitle: totalEarnings == null
                 ? 'Pending sync from ${user.platform}'
                 : 'Synced from ${user.platform}',
@@ -1384,74 +1410,80 @@ class HomeScreen extends StatelessWidget {
             )
           else
             ...latestClaim.map(
-            (claim) => Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: claim.typeColor.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(9),
+              (claim) => Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: claim.typeColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(
+                      claim.typeIcon,
+                      size: 18,
+                      color: claim.typeColor,
+                    ),
                   ),
-                  child: Icon(claim.typeIcon, size: 18, color: claim.typeColor),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${claim.typeShortName} · ${claim.id}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          dateFormat.format(claim.date),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${claim.typeShortName} · ${claim.id}',
+                        '₹${currencyFormat.format(claim.amount)}',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      Text(
-                        dateFormat.format(claim.date),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
+                      const SizedBox(height: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: claim.statusColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          claim.statusLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: claim.statusColor,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '₹${currencyFormat.format(claim.amount)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: claim.statusColor.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        claim.statusLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: claim.statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1460,8 +1492,9 @@ class HomeScreen extends StatelessWidget {
   // ─── Next billing ─────────────────────────────────────────────────────────
 
   Widget _buildNextBillingCard(BuildContext context, InsurancePlan activePlan) {
-    final nextDebitDate = DateFormat('EEE, d MMM')
-        .format(DateTime.now().add(const Duration(days: 3)));
+    final nextDebitDate = DateFormat(
+      'EEE, d MMM',
+    ).format(DateTime.now().add(const Duration(days: 3)));
 
     return Container(
       width: double.infinity,
@@ -1536,9 +1569,9 @@ class HomeScreen extends StatelessWidget {
   }) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label copied: $value')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label copied: $value')));
   }
 
   void _switchToTab(BuildContext context, int index) {
@@ -1644,7 +1677,9 @@ class HomeScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 10),
-                const Text('Choose how you want help with your policy or claims.'),
+                const Text(
+                  'Choose how you want help with your policy or claims.',
+                ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1769,10 +1804,7 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(height: 3),
                     Text(
                       'Report missed trigger or payout issue',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white70,
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
                     ),
                   ],
                 ),
@@ -2035,8 +2067,9 @@ class HomeScreen extends StatelessWidget {
                             Navigator.pop(sheetContext);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content:
-                                    Text('Language settings will be added next.'),
+                                content: Text(
+                                  'Language settings will be added next.',
+                                ),
                               ),
                             );
                           },
@@ -2072,8 +2105,7 @@ class HomeScreen extends StatelessWidget {
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final textColor =
-        isDestructive ? AppColors.error : AppColors.textPrimary;
+    final textColor = isDestructive ? AppColors.error : AppColors.textPrimary;
 
     return ListTile(
       onTap: onTap,
@@ -2089,8 +2121,7 @@ class HomeScreen extends StatelessWidget {
       ),
       trailing: Icon(
         Icons.chevron_right,
-        color:
-            isDestructive ? AppColors.error : AppColors.textSecondary,
+        color: isDestructive ? AppColors.error : AppColors.textSecondary,
       ),
     );
   }
@@ -2112,9 +2143,7 @@ class HomeScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.28),
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
           ),
           child: Icon(icon, size: 21, color: AppColors.textPrimary),
         ),
@@ -2158,14 +2187,8 @@ class _HomeTopBackgroundPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFFF9FAF7),
-          Color(0xFFF2F6F2),
-          Color(0xFFEAF2EE),
-        ],
-      ).createShader(
-        Rect.fromLTWH(0, 0, size.width, topHeight + 40),
-      );
+        colors: [Color(0xFFF9FAF7), Color(0xFFF2F6F2), Color(0xFFEAF2EE)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, topHeight + 40));
 
     canvas.drawPath(backgroundPath, paint);
 
@@ -2173,8 +2196,16 @@ class _HomeTopBackgroundPainter extends CustomPainter {
       ..color = AppColors.primary.withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(Offset(size.width * 0.1, size.height * 0.18), 56, accentPaint);
-    canvas.drawCircle(Offset(size.width * 0.86, size.height * 0.26), 36, accentPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.1, size.height * 0.18),
+      56,
+      accentPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.86, size.height * 0.26),
+      36,
+      accentPaint,
+    );
   }
 
   @override

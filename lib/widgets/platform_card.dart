@@ -18,7 +18,8 @@ class PlatformCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool isSvg = platform.logoPath.toLowerCase().endsWith('.svg');
-    final selectedIndicatorColor = platform.iconBackground.computeLuminance() < 0.7
+    final selectedIndicatorColor =
+        platform.iconBackground.computeLuminance() < 0.7
         ? platform.iconBackground
         : platform.iconColor;
 
@@ -42,7 +43,7 @@ class PlatformCard extends StatelessWidget {
                     color: selectedIndicatorColor.withValues(alpha: 0.15),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ]
               : [],
         ),
@@ -126,11 +127,7 @@ class PlatformCard extends StatelessWidget {
                 color: isSelected ? selectedIndicatorColor : Colors.transparent,
               ),
               child: isSelected
-                  ? const Icon(
-                      Icons.circle,
-                      size: 10,
-                      color: Colors.white,
-                    )
+                  ? const Icon(Icons.circle, size: 10, color: Colors.white)
                   : null,
             ),
           ],

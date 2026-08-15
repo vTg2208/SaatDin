@@ -195,12 +195,14 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     switch (_selectedTab) {
       case 1:
         return _claims
-            .where((c) => c.status == ClaimStatus.inReview || c.status == ClaimStatus.escalated)
+            .where(
+              (c) =>
+                  c.status == ClaimStatus.inReview ||
+                  c.status == ClaimStatus.escalated,
+            )
             .toList();
       case 2:
-        return _claims
-            .where((c) => c.status == ClaimStatus.settled)
-            .toList();
+        return _claims.where((c) => c.status == ClaimStatus.settled).toList();
       default:
         return _claims;
     }
@@ -210,9 +212,14 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
   Widget build(BuildContext context) {
     final user = _user;
     final weeklyPremium = (_policy?['weeklyPremium'] as num? ?? 0).toInt();
-    final policyStatus = ((_policy?['status'] as String?) ?? 'active').toUpperCase();
+    final policyStatus = ((_policy?['status'] as String?) ?? 'active')
+        .toUpperCase();
     final inReviewCount = _claims
-        .where((c) => c.status == ClaimStatus.inReview || c.status == ClaimStatus.escalated)
+        .where(
+          (c) =>
+              c.status == ClaimStatus.inReview ||
+              c.status == ClaimStatus.escalated,
+        )
         .length;
 
     if (_isLoadingClaims) {
@@ -246,7 +253,10 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
               heroTag: 'fab_zonelock',
               onPressed: _openZoneLockReport,
               backgroundColor: AppColors.warning,
-              child: const Icon(Icons.lock_person_outlined, color: Colors.white),
+              child: const Icon(
+                Icons.lock_person_outlined,
+                color: Colors.white,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -268,9 +278,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
             right: 0,
             child: SizedBox(
               height: 205,
-              child: CustomPaint(
-                painter: _ClaimsTopBackgroundPainter(),
-              ),
+              child: CustomPaint(painter: _ClaimsTopBackgroundPainter()),
             ),
           ),
           SafeArea(
@@ -309,202 +317,206 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-              // Current protection header
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'CURRENT PROTECTION',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.6),
-                        letterSpacing: 1.2,
-                      ),
+                  // Current protection header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '₹$weeklyPremium',
+                          'CURRENT PROTECTION',
                           style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.5,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.6),
+                            letterSpacing: 1.2,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.success,
-                            borderRadius: BorderRadius.circular(8),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '₹$weeklyPremium',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.success,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                policyStatus,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$inReviewCount pending settlements',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white.withValues(alpha: 0.6),
                           ),
-                          child: Text(
-                            policyStatus,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 0.8,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Filter',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Filter tabs
+                  Row(
+                    children: _tabs.asMap().entries.map((entry) {
+                      final isSelected = _selectedTab == entry.key;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedTab = entry.key;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Text(
+                              entry.value,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
                             ),
                           ),
                         ),
-                      ],
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Recent Activity',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$inReviewCount pending settlements',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Claims list
+                  if (_isLoadingClaims)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_filteredClaims.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: AppColors.textTertiary,
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'No claims in this category',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+                  for (final claim in _filteredClaims)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ClaimCard(
+                        claim: claim,
+                        onTap: () => _showClaimDetails(claim),
+                      ),
+                    ),
 
-              const Text(
-                'Filter',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 10),
+                  const SizedBox(height: 16),
 
-              // Filter tabs
-              Row(
-                children: _tabs.asMap().entries.map((entry) {
-                  final isSelected = _selectedTab == entry.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedTab = entry.key;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(24),
+                  // Need help section
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Need help with a claim?',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                        child: Text(
-                          entry.value,
+                        const SizedBox(height: 6),
+                        Text(
+                          'Our claim specialists are available 24/7 to assist you in Kannada, Hindi, and English.',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-
-              const Text(
-                'Recent Activity',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Claims list
-              if (_isLoadingClaims)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_filteredClaims.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.receipt_long_outlined,
-                          size: 48,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No claims in this category',
-                          style: TextStyle(
-                            fontSize: 15,
                             color: AppColors.textSecondary,
+                            height: 1.4,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              for (final claim in _filteredClaims)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: ClaimCard(
-                    claim: claim,
-                    onTap: () => _showClaimDetails(claim),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Need help section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Need help with a claim?',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Our claim specialists are available 24/7 to assist you in Kannada, Hindi, and English.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -522,7 +534,11 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
 
   String _userInitials(String? name) {
     final safeName = _coerceString(name);
-    final parts = safeName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    final parts = safeName
+        .trim()
+        .split(' ')
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
@@ -579,7 +595,10 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                   backgroundColor: AppColors.primary,
                   child: Text(
                     _userInitials(safeName),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 title: Text(safeName),
@@ -659,7 +678,10 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                       children: [
                         const Text(
                           'Report a new claim',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         const Text(
@@ -674,24 +696,25 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: [
-                            'TrafficBlock',
-                            'RainLock',
-                            'AQI Guard',
-                            'ZoneLock',
-                            'HeatBlock',
-                          ].map((type) {
-                            final isSelected = selectedType == type;
-                            return ChoiceChip(
-                              label: Text(type),
-                              selected: isSelected,
-                              onSelected: (_) {
-                                setSheetState(() {
-                                  selectedType = type;
-                                });
-                              },
-                            );
-                          }).toList(),
+                          children:
+                              [
+                                'TrafficBlock',
+                                'RainLock',
+                                'AQI Guard',
+                                'ZoneLock',
+                                'HeatBlock',
+                              ].map((type) {
+                                final isSelected = selectedType == type;
+                                return ChoiceChip(
+                                  label: Text(type),
+                                  selected: isSelected,
+                                  onSelected: (_) {
+                                    setSheetState(() {
+                                      selectedType = type;
+                                    });
+                                  },
+                                );
+                              }).toList(),
                         ),
                         const SizedBox(height: 10),
                         TextField(
@@ -709,14 +732,23 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                             onPressed: () async {
                               final messenger = ScaffoldMessenger.of(context);
                               final navigator = Navigator.of(sheetContext);
-                              final desc = descriptionController.text.trim().isEmpty
+                              final desc =
+                                  descriptionController.text.trim().isEmpty
                                   ? 'No additional details provided'
                                   : descriptionController.text.trim();
                               ClaimType claimType = ClaimType.trafficBlock;
-                              if (selectedType == 'RainLock') claimType = ClaimType.rainLock;
-                              if (selectedType == 'AQI Guard') claimType = ClaimType.aqiGuard;
-                              if (selectedType == 'ZoneLock') claimType = ClaimType.zoneLock;
-                              if (selectedType == 'HeatBlock') claimType = ClaimType.heatBlock;
+                              if (selectedType == 'RainLock') {
+                                claimType = ClaimType.rainLock;
+                              }
+                              if (selectedType == 'AQI Guard') {
+                                claimType = ClaimType.aqiGuard;
+                              }
+                              if (selectedType == 'ZoneLock') {
+                                claimType = ClaimType.zoneLock;
+                              }
+                              if (selectedType == 'HeatBlock') {
+                                claimType = ClaimType.heatBlock;
+                              }
 
                               try {
                                 await _apiService.submitClaim(
@@ -731,7 +763,9 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                                 if (!context.mounted) return;
                                 messenger.showSnackBar(
                                   const SnackBar(
-                                    content: Text('Claim submission failed. Please try again.'),
+                                    content: Text(
+                                      'Claim submission failed. Please try again.',
+                                    ),
                                   ),
                                 );
                                 return;
@@ -832,15 +866,9 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                       value: 'Rs ${claim.amount.toStringAsFixed(0)}',
                     ),
                     const VerticalDivider(width: 32),
-                    _DetailItem(
-                      label: 'Status',
-                      value: claim.statusLabel,
-                    ),
+                    _DetailItem(label: 'Status', value: claim.statusLabel),
                     const VerticalDivider(width: 32),
-                    _DetailItem(
-                      label: 'Type',
-                      value: claim.typeShortName,
-                    ),
+                    _DetailItem(label: 'Type', value: claim.typeShortName),
                   ],
                 ),
               ),
@@ -871,13 +899,15 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                     ),
                     onPressed: () async {
                       Navigator.of(sheetCtx).pop();
-                      final submitted =
-                          await EscalationSheet.show(context, claim);
+                      final submitted = await EscalationSheet.show(
+                        context,
+                        claim,
+                      );
                       if (submitted == true && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                              'Escalation submitted. A reviewer will contact you within 2 hrs.'
+                              'Escalation submitted. A reviewer will contact you within 2 hrs.',
                             ),
                           ),
                         );
@@ -902,9 +932,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
 
   Future<void> _openZoneLockReport() async {
     final submitted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => const ZoneLockReportScreen(),
-      ),
+      MaterialPageRoute<bool>(builder: (_) => const ZoneLockReportScreen()),
     );
     if (submitted == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -915,7 +943,6 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
       await _loadClaims();
     }
   }
-
 }
 
 // Helper widget for claim detail row items
@@ -961,14 +988,13 @@ class _ClaimsTopBackgroundPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFFE7F2FF),
-          Color(0xFFF0F8FF),
-          Color(0xFFF8FBFF),
-        ],
+        colors: [Color(0xFFE7F2FF), Color(0xFFF0F8FF), Color(0xFFF8FBFF)],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      backgroundPaint,
+    );
 
     final shapePaint = Paint()..color = AppColors.info.withValues(alpha: 0.12);
     final shapePath = Path()
@@ -985,8 +1011,16 @@ class _ClaimsTopBackgroundPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..color = AppColors.info.withValues(alpha: 0.15);
 
-    canvas.drawCircle(Offset(size.width * 0.18, size.height * 0.2), 32, ringPaint);
-    canvas.drawCircle(Offset(size.width * 0.86, size.height * 0.3), 48, ringPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.2),
+      32,
+      ringPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.86, size.height * 0.3),
+      48,
+      ringPaint,
+    );
   }
 
   @override

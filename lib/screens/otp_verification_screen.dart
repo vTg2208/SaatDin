@@ -157,7 +157,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_apiService.lastError ?? 'Invalid OTP. Please try again.'),
+          content: Text(
+            _apiService.lastError ?? 'Invalid OTP. Please try again.',
+          ),
         ),
       );
       return;
@@ -197,13 +199,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          ok ? 'OTP sent again.' : (_apiService.lastError ?? 'Failed to resend OTP.'),
+          ok
+              ? 'OTP sent again.'
+              : (_apiService.lastError ?? 'Failed to resend OTP.'),
         ),
       ),
     );
   }
-
-
 
   Widget _buildDigitField(int index) {
     final hasDigit = index < _otpController.text.length;
@@ -212,7 +214,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
 
     return Expanded(
       child: Padding(
-      padding: EdgeInsets.only(right: index == _otpLength - 1 ? 0 : 14),
+        padding: EdgeInsets.only(right: index == _otpLength - 1 ? 0 : 14),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -234,7 +236,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
               duration: const Duration(milliseconds: 140),
               height: 2,
               decoration: BoxDecoration(
-                color: hasDigit || isActive ? _verifyColor : const Color(0xFFBFC5C7),
+                color: hasDigit || isActive
+                    ? _verifyColor
+                    : const Color(0xFFBFC5C7),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -251,9 +255,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Row(
-            children: List.generate(_otpLength, _buildDigitField),
-          ),
+          Row(children: List.generate(_otpLength, _buildDigitField)),
           Positioned.fill(
             child: Opacity(
               opacity: 0.01,
@@ -310,10 +312,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
         ),
         child: Text(
           _isVerifying ? 'Verifying...' : 'Verify Code',
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -326,7 +325,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
       width: double.infinity,
       height: 54,
       child: OutlinedButton(
-        onPressed: canResend && !_isResending ? () => _resendOtp(_currentPhone!) : null,
+        onPressed: canResend && !_isResending
+            ? () => _resendOtp(_currentPhone!)
+            : null,
         style: OutlinedButton.styleFrom(
           foregroundColor: _verifyColor,
           side: const BorderSide(color: _verifyColor, width: 1.2),
@@ -338,8 +339,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
           _isResending
               ? 'Resending...'
               : canResend
-                  ? 'Resend Code'
-                  : 'Resend Code in $_resendTimeLabel s',
+              ? 'Resend Code'
+              : 'Resend Code in $_resendTimeLabel s',
           style: GoogleFonts.inter(
             fontSize: 15,
             fontWeight: FontWeight.w700,
@@ -377,14 +378,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,       appBar: AppBar(
-         backgroundColor: Colors.white,
-         elevation: 0,
-         leading: IconButton(
-           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-           onPressed: () => Navigator.pop(context),
-         ),
-       ),      body: SafeArea(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Center(
@@ -397,9 +400,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                   ),
                   child: Container(
                     width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                    ),
+                    decoration: BoxDecoration(color: Colors.white),
                     child: Stack(
                       children: [
                         SingleChildScrollView(
@@ -453,7 +454,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                                         height: 1.35,
                                       ),
                                       children: [
-                                        const TextSpan(text: 'This code will expire in '),
+                                        const TextSpan(
+                                          text: 'This code will expire in ',
+                                        ),
                                         TextSpan(
                                           text: '$_codeExpiryLabel s',
                                           style: const TextStyle(

@@ -36,12 +36,18 @@ class PaymentSuccessScreen extends StatelessWidget {
             Positioned(
               top: -70,
               right: -40,
-              child: _BackgroundOrb(color: AppColors.primary.withOpacity(0.10), size: 220),
+              child: _BackgroundOrb(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                size: 220,
+              ),
             ),
             Positioned(
               bottom: 80,
               left: -60,
-              child: _BackgroundOrb(color: AppColors.success.withOpacity(0.08), size: 180),
+              child: _BackgroundOrb(
+                color: AppColors.success.withValues(alpha: 0.08),
+                size: 180,
+              ),
             ),
             SafeArea(
               child: Padding(
@@ -81,7 +87,10 @@ class PaymentSuccessScreen extends StatelessWidget {
                             duration: const Duration(milliseconds: 500),
                             curve: Curves.easeOutBack,
                             builder: (context, scale, child) {
-                              return Transform.scale(scale: scale, child: child);
+                              return Transform.scale(
+                                scale: scale,
+                                child: child,
+                              );
                             },
                             child: _SuccessHero(args: args),
                           ),
@@ -103,7 +112,9 @@ class PaymentSuccessScreen extends StatelessWidget {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 18,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -154,7 +165,7 @@ class _SuccessHero extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -168,7 +179,10 @@ class _SuccessHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.successLight,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.success.withOpacity(0.2), width: 8),
+              border: Border.all(
+                color: AppColors.success.withValues(alpha: 0.2),
+                width: 8,
+              ),
             ),
             child: const Icon(
               Icons.check_rounded,
@@ -210,10 +224,14 @@ class _SuccessHero extends StatelessWidget {
               ),
               if (args.loyaltyDiscountPercent > 0)
                 _Chip(
-                  label: '${args.loyaltyDiscountPercent.toStringAsFixed(0)}% loyalty discount',
+                  label:
+                      '${args.loyaltyDiscountPercent.toStringAsFixed(0)}% loyalty discount',
                   icon: Icons.discount_rounded,
                 ),
-              const _Chip(label: 'Next weekly cycle', icon: Icons.calendar_month_rounded),
+              const _Chip(
+                label: 'Next weekly cycle',
+                icon: Icons.calendar_month_rounded,
+              ),
             ],
           ),
         ],
@@ -250,7 +268,11 @@ class _ReceiptCard extends StatelessWidget {
           const SizedBox(height: 14),
           _Row(label: 'Plan', value: args.plan.name),
           _Row(label: 'Payment method', value: args.paymentMethod),
-          _Row(label: 'Status', value: 'Successful', valueColor: AppColors.success),
+          _Row(
+            label: 'Status',
+            value: 'Successful',
+            valueColor: AppColors.success,
+          ),
           _Row(label: 'Location', value: args.locationLabel),
           _Row(
             label: 'Weekly debit',
@@ -261,7 +283,8 @@ class _ReceiptCard extends StatelessWidget {
           if (args.loyaltyDiscountPercent > 0)
             _Row(
               label: 'Loyalty savings',
-              value: '₹${(args.plan.weeklyPremium * args.loyaltyDiscountPercent / 100).toStringAsFixed(0)}/week',
+              value:
+                  '₹${(args.plan.weeklyPremium * args.loyaltyDiscountPercent / 100).toStringAsFixed(0)}/week',
               valueColor: AppColors.success,
             ),
         ],
@@ -425,10 +448,7 @@ class _BackgroundOrb extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }

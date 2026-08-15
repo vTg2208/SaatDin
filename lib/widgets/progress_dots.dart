@@ -5,11 +5,7 @@ class ProgressDots extends StatelessWidget {
   final int total;
   final int current;
 
-  const ProgressDots({
-    super.key,
-    required this.total,
-    required this.current,
-  });
+  const ProgressDots({super.key, required this.total, required this.current});
 
   @override
   Widget build(BuildContext context) {

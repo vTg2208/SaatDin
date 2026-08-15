@@ -23,16 +23,16 @@ Riders pay a small weekly premium. When rainfall, air quality, traffic, curfews,
 - **FastAPI backend** — OTP auth, premium calculation, trigger monitoring (15-min polling), claims, escalations, admin dashboard
 - **Five parametric triggers** — RainLock, AQI Guard, TrafficBlock, ZoneLock, HeatBlock
 - **Multi-signal fraud detection** — GPS variance, cell tower validation, motion analysis, device fingerprinting, co-claim graphs
-- **Weekly archival pipeline** — closed-week data to S3-compatible cold storage + BigQuery
+- **Archival design** — S3-compatible cold storage and BigQuery are planned, not yet implemented
 - **Manual escalation** — 60% immediate payout + human review for ambiguous cases
 
 **For full architecture, fraud defense strategy, and design philosophy, see [PROJECT_INFO.md](PROJECT_INFO.md).**
 
 ---
 
-## Archival Storage
+## Planned Archival Storage
 
-The live Supabase/Postgres database keeps only **current-week data + rolling 4-week history** (for loyalty tracking). Every Sunday night, closed-week claims, payouts, and worker records serialize to **S3-compatible cold archive** and mirror to **BigQuery** for long-term actuarial analysis.
+The intended production design keeps **current-week data + rolling 4-week history** in Supabase/Postgres, then archives closed weeks to S3-compatible storage and BigQuery. The current repository does not yet contain that archival job or retention enforcement.
 
 This keeps reads sub-100ms while building the historical record needed for pricing calibration as real claims accumulate.
 
@@ -42,9 +42,10 @@ This keeps reads sub-100ms while building the historical record needed for prici
 
 ```bash
 python -m pip install -r backend/requirements.txt
+# Copy backend/.env.example to backend/.env, then configure SUPABASE_DB_URL.
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 # In another terminal:
-flutter run
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
 ```
 
 Admin dashboard: `http://127.0.0.1:8000/admin/dashboard` (admin / saatdin-local)  
@@ -54,7 +55,7 @@ Full setup: [Setup Guide](setup%20guide.md)
 
 ## Tech Stack
 
-Backend: Python 3.11, FastAPI, Supabase/Postgres, APScheduler | ML: scikit-learn, LangGraph, Groq | Mobile: Flutter | Archival: S3, BigQuery | Payments: Razorpay sandbox | Deployment: Railway, GitHub Actions
+Backend: Python 3.11, FastAPI, Supabase/Postgres, APScheduler | ML: scikit-learn, LangGraph, Groq | Mobile: Flutter | Payments: local sandbox adapter | CI: GitHub Actions
 
 ---
 
@@ -72,4 +73,4 @@ T Vishnu Vardhan · D Rohith Kumar · V A B Jashwanth Reddy · V Kireeti · Teje
 
 ---
 
-*Prototype design. All thresholds and premium ranges require actuarial calibration before real-world deployment.*
+*Pre-production software. Live SMS, verified premium collection, payout-provider callbacks, archival, monitoring, and actuarial/regulatory approval remain required before real-world deployment.*

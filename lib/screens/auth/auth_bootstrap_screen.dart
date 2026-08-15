@@ -43,10 +43,7 @@ class _AuthBootstrapScreenState extends State<AuthBootstrapScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/gig.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/gig.png', fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(
@@ -62,7 +59,9 @@ class _AuthBootstrapScreenState extends State<AuthBootstrapScreen> {
                   height: 40,
                   child: CircularProgressIndicator(
                     strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
                   ),
                 ),
                 SizedBox(height: 16),

@@ -46,7 +46,8 @@ class PaymentFlowArguments {
       zone: zone ?? this.zone,
       pincode: pincode ?? this.pincode,
       paymentMethod: paymentMethod ?? this.paymentMethod,
-      loyaltyDiscountPercent: loyaltyDiscountPercent ?? this.loyaltyDiscountPercent,
+      loyaltyDiscountPercent:
+          loyaltyDiscountPercent ?? this.loyaltyDiscountPercent,
     );
   }
 }

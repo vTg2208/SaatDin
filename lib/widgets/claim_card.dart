@@ -7,11 +7,7 @@ class ClaimCard extends StatelessWidget {
   final Claim claim;
   final VoidCallback? onTap;
 
-  const ClaimCard({
-    super.key,
-    required this.claim,
-    this.onTap,
-  });
+  const ClaimCard({super.key, required this.claim, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +36,7 @@ class ClaimCard extends StatelessWidget {
                     color: claim.typeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    claim.typeIcon,
-                    color: claim.typeColor,
-                    size: 20,
-                  ),
+                  child: Icon(claim.typeIcon, color: claim.typeColor, size: 20),
                 ),
                 const SizedBox(width: 12),
                 // Claim info
@@ -91,7 +83,9 @@ class ClaimCard extends StatelessWidget {
                     // Status badge
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: claim.statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -115,8 +109,11 @@ class ClaimCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today,
-                      size: 12, color: AppColors.textTertiary),
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 12,
+                    color: AppColors.textTertiary,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     dateFormat.format(claim.date),
@@ -126,8 +123,11 @@ class ClaimCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  const Icon(Icons.account_balance,
-                      size: 12, color: AppColors.textTertiary),
+                  const Icon(
+                    Icons.account_balance,
+                    size: 12,
+                    color: AppColors.textTertiary,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     bankInfo,

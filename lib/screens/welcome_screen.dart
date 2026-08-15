@@ -38,8 +38,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       duration: const Duration(milliseconds: 600),
     );
 
-    _fadeAnimation =
-        CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeOut,
+    );
 
     _fadeController.forward();
   }
@@ -96,10 +98,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         child: Stack(
           children: [
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/gig.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/images/gig.png', fit: BoxFit.cover),
             ),
             Positioned.fill(
               child: Container(
@@ -234,8 +233,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               height: 54,
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color:
-                                    _isValid ? AppColors.primary : const Color(0xFFD1D5DB),
+                                color: _isValid
+                                    ? AppColors.primary
+                                    : const Color(0xFFD1D5DB),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Material(
@@ -245,11 +245,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   onTap: _isValid ? _handleContinue : null,
                                   child: Center(
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          _isSendingOtp ? 'Sending OTP' : 'Continue',
+                                          _isSendingOtp
+                                              ? 'Sending OTP'
+                                              : 'Continue',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,

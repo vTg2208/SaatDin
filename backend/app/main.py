@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import admin, auth, claims, fraud_clusters, health, payouts, plans, platforms, policy, triggers, workers, zones
-from .core.config import settings
+from .core.config import settings, validate_runtime_settings
 from .core.db import close_db, init_db
 from .core.logging import configure_logging
 from .core.zone_cache import refresh_zone_cache
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("app_starting")
+    validate_runtime_settings(settings)
     await init_db()
     await refresh_zone_cache()
     

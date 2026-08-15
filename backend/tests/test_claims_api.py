@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
@@ -26,6 +27,8 @@ class ClaimsApiTests(unittest.TestCase):
 
     def test_submit_claim_returns_review_record(self) -> None:
         client = self._client()
+        now = datetime.now(timezone.utc)
+        current_week_start = (now - timedelta(days=now.weekday())).date()
         claim_row = {
             "id": 17,
             "phone": "9999999999",
@@ -69,6 +72,14 @@ class ClaimsApiTests(unittest.TestCase):
                     "llm_scored_at": None,
                 },
             ),
+            patch(
+                "backend.app.core.db.list_paid_premium_weeks_for_phone",
+                new=AsyncMock(return_value=[{"week_start_date": current_week_start}]),
+            ),
+            patch(
+                "backend.app.api.claims.count_settled_claim_days_for_phone_since",
+                new=AsyncMock(return_value=0),
+            ),
             patch("backend.app.api.claims.create_claim", new=AsyncMock(return_value=claim_row)),
         ):
             response = client.post(
@@ -81,6 +92,45 @@ class ClaimsApiTests(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["data"]["status"], "in_review")
         self.assertEqual(payload["data"]["id"], "#C00017")
+
+    def test_submit_claim_rejects_inactive_policy(self) -> None:
+        client = self._client()
+        claim_row = {
+            "id": 18,
+            "phone": "9999999999",
+            "claim_type": "RainLock",
+            "status": "in_review",
+            "amount": 400.0,
+            "description": "Flooded access road",
+            "zone_pincode": "560001",
+            "source": "manual",
+            "created_at": "2026-04-12T12:00:00+00:00",
+        }
+        with (
+            patch(
+                "backend.app.core.db.list_paid_premium_weeks_for_phone",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "backend.app.api.claims.count_settled_claim_days_for_phone_since",
+                new=AsyncMock(return_value=0),
+            ),
+            patch(
+                "backend.app.api.claims._build_manual_claim_features",
+                new=AsyncMock(return_value={"zone_affinity_score": 0.8}),
+            ),
+            patch(
+                "backend.app.api.claims.create_claim",
+                new=AsyncMock(return_value=claim_row),
+            ),
+        ):
+            response = client.post(
+                "/api/v1/claims/submit",
+                json={"claimType": "RainLock", "description": "Flooded access road"},
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("active policy", response.text.lower())
 
     def test_escalate_claim_rejects_wrong_owner(self) -> None:
         client = self._client()

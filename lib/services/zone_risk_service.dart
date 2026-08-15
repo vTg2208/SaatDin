@@ -16,13 +16,16 @@ class ZoneRiskService {
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
     final pincodeMap = decoded['pincodes'] as Map<String, dynamic>? ?? {};
 
-    final zones = pincodeMap.entries
-        .map((entry) => ZoneRisk.fromJson(
-              entry.key,
-              entry.value as Map<String, dynamic>,
-            ))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final zones =
+        pincodeMap.entries
+            .map(
+              (entry) => ZoneRisk.fromJson(
+                entry.key,
+                entry.value as Map<String, dynamic>,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
     _cache = zones;
     return zones;
@@ -30,7 +33,9 @@ class ZoneRiskService {
 
   Future<List<ZoneRisk>> getZonesForPlatform(String platformName) async {
     final allZones = await getAllZones();
-    return allZones.where((zone) => zone.supportsPlatform(platformName)).toList();
+    return allZones
+        .where((zone) => zone.supportsPlatform(platformName))
+        .toList();
   }
 
   Future<ZoneRisk?> getByPincode(String pincode) async {

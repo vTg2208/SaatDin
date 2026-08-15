@@ -93,7 +93,7 @@ Approximately 0.1–0.3% of a rider's monthly income for a full week of protecti
 
 The live Supabase/Postgres layer stays intentionally lean, holding only **current-week data plus rolling 4-week streak history** (needed for loyalty discount).
 
-Every Sunday night, a weekly cron job serialises closed-week claims, payouts, and worker records into **S3-compatible cold archive storage**. The same batch mirrors to **BigQuery** for efficient historical queries and actuarial analysis.
+The planned production system will run a Sunday-night job that serialises closed-week claims, payouts, and worker records into **S3-compatible cold archive storage**, with a BigQuery mirror for actuarial analysis. This repository does not yet implement that job or live-data retention policy.
 
 **Why this architecture:**
 - Production reads stay sub-100ms (hot data only)
@@ -168,7 +168,6 @@ When fraud detection flags a claim:
 - Sustained-window logic for AQI Guard and TrafficBlock (persisted window history)
 - ZoneLock manual verification with auto-confirmation (2+ corroborating reports)
 - Fraud scoring: Isolation Forest + GPS/tower/motion/device validation + co-claim graphs
-- Weekly archival pipeline for S3 and BigQuery
 - Manual claim escalation with human review queue (2-4 hour SLA)
 - FastAPI admin dashboard with claim, escalation, fraud cluster visibility
 - Local payout sandbox with UPI validation and statement generation
@@ -176,6 +175,8 @@ When fraud detection flags a claim:
 ### Operational Follow-up
 
 - Live provider credentials (Groq/Gemini, NewsAPI, WAQI, TomTom, Razorpay)
+- SMS delivery, verified premium-payment webhooks, and a live payout adapter
+- Weekly archival pipeline for S3-compatible storage and BigQuery
 - Push notifications and production-grade background signal delivery
 - CI runners for automated backend + frontend test execution on every push
 - Deployment to Railway or hosted infrastructure with monitoring

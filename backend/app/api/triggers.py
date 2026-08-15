@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from ..core.dependencies import get_current_worker
+from ..core.config import settings
+from ..core.dependencies import get_admin_actor, get_current_worker
 from ..core.zone_cache import resolve_zone
 from ..models.schemas import (
     ApiResponse,
@@ -56,7 +57,7 @@ async def get_active_triggers(
     flood_score = float(zone_data.get("flood_risk_score", 0.0))
     traffic_score = float(zone_data.get("traffic_congestion_score", 0.0))
 
-    if flood_score >= 0.75:
+    if settings.allow_static_trigger_fallback and flood_score >= 0.75:
         logger.info("triggers_served source=static-risk alert=rain pincode=%s", pincode)
         return ApiResponse(
             success=True,
@@ -70,7 +71,7 @@ async def get_active_triggers(
             ),
         )
 
-    if traffic_score >= 0.80:
+    if settings.allow_static_trigger_fallback and traffic_score >= 0.80:
         logger.info("triggers_served source=static-risk alert=traffic pincode=%s", pincode)
         return ApiResponse(
             success=True,
@@ -100,7 +101,7 @@ async def get_active_triggers(
 @router.post("/force", response_model=ApiResponse)
 async def force_trigger(
     payload: TriggerForceRequest,
-    _worker: dict = Depends(get_current_worker),
+    _admin_actor: str = Depends(get_admin_actor),
 ) -> ApiResponse:
     result = await force_trigger_for_zone(
         zone_key=payload.zone,

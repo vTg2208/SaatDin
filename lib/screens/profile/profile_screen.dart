@@ -68,20 +68,26 @@ class ProfileScreen extends StatelessWidget {
         final payoutDashboard = data.payoutDashboard;
         final claimCountThisMonth = _claimCountForCurrentMonth(claims);
         final perTriggerPayout = _readInt(policy, const ['perTriggerPayout']);
-        final activePlan = _readString(policy, const ['plan'], fallback: user.plan);
+        final activePlan = _readString(policy, const [
+          'plan',
+        ], fallback: user.plan);
         final weeklyPremium = _readInt(policy, const ['weeklyPremium']);
         final nextBillingDate = _readString(policy, const ['nextBillingDate']);
         final renewalLabel = _renewalLabel(nextBillingDate);
-        final policyStatus = _readString(policy, const ['status'], fallback: 'active').toLowerCase();
+        final policyStatus = _readString(policy, const [
+          'status',
+        ], fallback: 'active').toLowerCase();
         final statusLabel = policyStatus == 'active'
-          ? 'Active policy'
-          : policyStatus == 'scheduled'
+            ? 'Active policy'
+            : policyStatus == 'scheduled'
             ? 'Plan change scheduled'
             : 'Policy update pending';
         final payoutSummary = _readMap(payoutDashboard, const ['summary']);
         final settledTotal = _readDouble(payoutSummary, const ['settledTotal']);
         final pendingTotal = _readDouble(payoutSummary, const ['pendingTotal']);
-        final primaryUpiMasked = _readString(payoutDashboard, const ['primaryUpiMasked']);
+        final primaryUpiMasked = _readString(payoutDashboard, const [
+          'primaryUpiMasked',
+        ]);
         final provider = _readString(payoutDashboard, const ['provider']);
         final notificationItems = _buildNotificationItems(policy);
         final supportItems = _buildSupportItems(policy);
@@ -96,9 +102,7 @@ class ProfileScreen extends StatelessWidget {
                 right: 0,
                 child: SizedBox(
                   height: 205,
-                  child: CustomPaint(
-                    painter: _ProfileTopBackgroundPainter(),
-                  ),
+                  child: CustomPaint(painter: _ProfileTopBackgroundPainter()),
                 ),
               ),
               SafeArea(
@@ -119,9 +123,9 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        'Manage your profile, coverage, and payouts.',
-                        style: TextStyle(
+                      Text(
+                        _buildLocationLabel(user),
+                        style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
@@ -160,8 +164,8 @@ class ProfileScreen extends StatelessWidget {
                           subtitle: activePlan.trim().isEmpty
                               ? 'Check available plans'
                               : weeklyPremium > 0
-                                  ? '$activePlan • ₹${NumberFormat('#,##0').format(weeklyPremium)}/week'
-                                  : '$activePlan plan active',
+                              ? '$activePlan • ₹${NumberFormat('#,##0').format(weeklyPremium)}/week'
+                              : '$activePlan plan active',
                           onTap: () => _switchToTab(context, 2),
                         ),
                       ]),
@@ -173,8 +177,12 @@ class ProfileScreen extends StatelessWidget {
                           iconColor: const Color(0xFF0F6E56),
                           title: 'Payout settings',
                           subtitle: primaryUpiMasked.isNotEmpty
-                              ? (provider.isNotEmpty ? '$provider • $primaryUpiMasked' : primaryUpiMasked)
-                              : (provider.isNotEmpty ? provider : 'No payout account returned'),
+                              ? (provider.isNotEmpty
+                                    ? '$provider • $primaryUpiMasked'
+                                    : primaryUpiMasked)
+                              : (provider.isNotEmpty
+                                    ? provider
+                                    : 'No payout account returned'),
                           onTap: () => _switchToTab(context, 3),
                         ),
                         _MenuItemData(
@@ -190,12 +198,26 @@ class ProfileScreen extends StatelessWidget {
                           iconBg: const Color(0xFFE1F5EE),
                           iconColor: const Color(0xFF0F6E56),
                           title: 'Help and support',
-                          subtitle: supportItems.isEmpty ? null : '${supportItems.length} live support entries',
+                          subtitle: supportItems.isEmpty
+                              ? null
+                              : '${supportItems.length} live support entries',
                           onTap: () => _showSupportSheet(context, supportItems),
                         ),
                       ]),
                       _buildSectionLabel('Account'),
                       _buildMenuGroup([
+                        _MenuItemData(
+                          icon: Icons.person_outline,
+                          iconBg: const Color(0xFFE1F5EE),
+                          iconColor: const Color(0xFF0F6E56),
+                          title: 'Profile details',
+                          subtitle: user.phone,
+                          onTap: () => _showProfileDetailsSheet(
+                            context,
+                            user,
+                            user.phone,
+                          ),
+                        ),
                         _MenuItemData(
                           icon: Icons.logout,
                           iconBg: const Color(0xFFFCEBEB),
@@ -217,94 +239,6 @@ class ProfileScreen extends StatelessWidget {
   }
 
   // ─── Header band ───────────────────────────────────────────────────────────
-
-  Widget _buildHeader(
-    BuildContext context,
-    User user,
-    String contact,
-    String policyStatus,
-    String locationLabel,
-  ) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
-                ),
-                child: Center(
-                  child: Text(
-                    _displayInitial(user.name),
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      contact,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              _editButton(context, user, contact),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _statusPill(dotColor: const Color(0xFF6EFFC4), label: policyStatus),
-              _statusPill(dotColor: const Color(0xFFFFD980), label: locationLabel),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTopUtilityButtons(
     BuildContext context,
@@ -338,77 +272,9 @@ class ProfileScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
-          border:
-              Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         ),
         child: Icon(icon, size: 20, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _editButton(BuildContext context, User user, String contact) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => _showProfileDetailsSheet(context, user, contact),
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: Colors.white.withValues(alpha: 0.25)),
-        ),
-        child: const Text(
-          'Details',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _statusPill({
-    required Color dotColor,
-    required String label,
-  }) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(99),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -467,17 +333,13 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 1),
               Text(
                 renewalLabel,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
               ),
             ],
           ),
           const Spacer(),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: const Color(0xFFE1F5EE),
               borderRadius: BorderRadius.circular(99),
@@ -585,30 +447,7 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-            if (item.badge != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE1F5EE),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  item.badge!,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F6E56),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: Color(0xFFB0C4B8),
-            ),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFB0C4B8)),
           ],
         ),
       ),
@@ -617,7 +456,10 @@ class ProfileScreen extends StatelessWidget {
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
-  void _showNotificationsSheet(BuildContext context, List<_SheetItemData> items) {
+  void _showNotificationsSheet(
+    BuildContext context,
+    List<_SheetItemData> items,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -639,7 +481,11 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showProfileDetailsSheet(BuildContext context, User user, String contact) {
+  void _showProfileDetailsSheet(
+    BuildContext context,
+    User user,
+    String contact,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -663,13 +509,21 @@ class ProfileScreen extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.location_on_outlined),
               title: Text(user.zone.isEmpty ? 'Zone unavailable' : user.zone),
-              subtitle: Text(user.zonePincode.isEmpty ? 'Pincode unavailable' : user.zonePincode),
+              subtitle: Text(
+                user.zonePincode.isEmpty
+                    ? 'Pincode unavailable'
+                    : user.zonePincode,
+              ),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.local_shipping_outlined),
-              title: Text(user.platform.isEmpty ? 'Platform unavailable' : user.platform),
-              subtitle: Text(user.plan.isEmpty ? 'Plan unavailable' : '${user.plan} plan'),
+              title: Text(
+                user.platform.isEmpty ? 'Platform unavailable' : user.platform,
+              ),
+              subtitle: Text(
+                user.plan.isEmpty ? 'Plan unavailable' : '${user.plan} plan',
+              ),
             ),
           ],
         );
@@ -691,16 +545,14 @@ class ProfileScreen extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             SizedBox(height: 12),
-            ...items
-                .map(
-                  (item) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(item.icon),
-                    title: Text(item.title),
-                    subtitle: Text(item.subtitle),
-                  ),
-                )
-                .toList(),
+            ...items.map(
+              (item) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(item.icon),
+                title: Text(item.title),
+                subtitle: Text(item.subtitle),
+              ),
+            ),
           ],
         );
       },
@@ -708,11 +560,18 @@ class ProfileScreen extends StatelessWidget {
   }
 
   List<_SheetItemData> _buildNotificationItems(Map<String, dynamic> policy) {
-    final rawItems = _readMapList(policy, const ['notifications', 'notificationItems']);
+    final rawItems = _readMapList(policy, const [
+      'notifications',
+      'notificationItems',
+    ]);
     return rawItems
         .map((item) {
           final title = _readString(item, const ['title', 'heading']);
-          final subtitle = _readString(item, const ['subtitle', 'message', 'description']);
+          final subtitle = _readString(item, const [
+            'subtitle',
+            'message',
+            'description',
+          ]);
           if (title.isEmpty || subtitle.isEmpty) return null;
           return _SheetItemData(
             icon: _iconFromName(_readString(item, const ['icon', 'iconName'])),
@@ -730,7 +589,10 @@ class ProfileScreen extends StatelessWidget {
 
     final helpline = _readString(support, const ['helpline', 'phone']);
     final email = _readString(support, const ['email', 'supportEmail']);
-    final timeline = _readString(support, const ['escalationTimeline', 'timeline']);
+    final timeline = _readString(support, const [
+      'escalationTimeline',
+      'timeline',
+    ]);
 
     if (helpline.isNotEmpty) {
       items.add(
@@ -763,7 +625,11 @@ class ProfileScreen extends StatelessWidget {
     final supportItems = _readMapList(support, const ['items']);
     for (final item in supportItems) {
       final title = _readString(item, const ['title', 'heading']);
-      final subtitle = _readString(item, const ['subtitle', 'message', 'description']);
+      final subtitle = _readString(item, const [
+        'subtitle',
+        'message',
+        'description',
+      ]);
       if (title.isEmpty || subtitle.isEmpty) continue;
       items.add(
         _SheetItemData(
@@ -785,7 +651,10 @@ class ProfileScreen extends StatelessWidget {
     return <String, dynamic>{};
   }
 
-  List<Map<String, dynamic>> _readMapList(Map<String, dynamic> raw, List<String> keys) {
+  List<Map<String, dynamic>> _readMapList(
+    Map<String, dynamic> raw,
+    List<String> keys,
+  ) {
     for (final key in keys) {
       final value = raw[key];
       if (value is List) {
@@ -817,12 +686,6 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  void _showSimpleInfo(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
   void _switchToTab(BuildContext context, int index) {
     TabRouter.switchTo(index);
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -835,7 +698,8 @@ class ProfileScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Log out'),
           content: const Text(
-              'Are you sure you want to log out of this account?'),
+            'Are you sure you want to log out of this account?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -914,12 +778,6 @@ class ProfileScreen extends StatelessWidget {
     }).length;
   }
 
-  double _settledPayoutTotal(List<Claim> claims) {
-    return claims
-        .where((claim) => claim.status == ClaimStatus.settled)
-        .fold<double>(0, (sum, claim) => sum + claim.amount);
-  }
-
   String _renewalLabel(String nextBillingDateRaw) {
     final parsed = DateTime.tryParse(nextBillingDateRaw);
     if (parsed == null) return 'Renewal date unavailable';
@@ -940,20 +798,6 @@ class ProfileScreen extends StatelessWidget {
     if (pincode.isNotEmpty) pieces.add('Area: $pincode');
     return pieces.join(' · ');
   }
-
-  String _formatPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    if (digits.length == 10) {
-      return '+91 ${digits.substring(0, 5)} ${digits.substring(5)}';
-    }
-    return phone.trim().isEmpty ? 'No contact number' : phone.trim();
-  }
-
-  String _displayInitial(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return '?';
-    return trimmed.substring(0, 1).toUpperCase();
-  }
 }
 
 // ─── Data class for menu items ────────────────────────────────────────────────
@@ -965,7 +809,6 @@ class _MenuItemData {
   final String title;
   final Color? titleColor;
   final String? subtitle;
-  final String? badge;
   final VoidCallback onTap;
 
   const _MenuItemData({
@@ -976,7 +819,6 @@ class _MenuItemData {
     required this.onTap,
     this.titleColor,
     this.subtitle,
-    this.badge,
   });
 }
 
@@ -1015,16 +857,16 @@ class _ProfileTopBackgroundPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFFE7F8F4),
-          Color(0xFFF1FBF8),
-          Color(0xFFF8FCFA),
-        ],
+        colors: [Color(0xFFE7F8F4), Color(0xFFF1FBF8), Color(0xFFF8FCFA)],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      backgroundPaint,
+    );
 
-    final shapePaint = Paint()..color = AppColors.primary.withValues(alpha: 0.12);
+    final shapePaint = Paint()
+      ..color = AppColors.primary.withValues(alpha: 0.12);
     final shapePath = Path()
       ..moveTo(-20, size.height * 0.74)
       ..lineTo(size.width * 0.42, size.height * 0.56)
@@ -1039,8 +881,16 @@ class _ProfileTopBackgroundPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..color = AppColors.primary.withValues(alpha: 0.15);
 
-    canvas.drawCircle(Offset(size.width * 0.18, size.height * 0.2), 32, ringPaint);
-    canvas.drawCircle(Offset(size.width * 0.86, size.height * 0.3), 48, ringPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.2),
+      32,
+      ringPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.86, size.height * 0.3),
+      48,
+      ringPaint,
+    );
   }
 
   @override

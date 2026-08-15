@@ -11,12 +11,10 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('payouts screen shows a loading state while bootstrapping data', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: PayoutsScreen(),
-      ),
-    );
+  testWidgets('payouts screen shows a loading state while bootstrapping data', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: PayoutsScreen()));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });

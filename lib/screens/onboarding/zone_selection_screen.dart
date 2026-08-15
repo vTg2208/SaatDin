@@ -126,7 +126,7 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
                               decoration: BoxDecoration(
                                 color: selected
                                     ? AppColors.primary.withValues(alpha: 0.08)
-                                  : AppColors.cardBackground,
+                                    : AppColors.cardBackground,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: selected
@@ -172,7 +172,8 @@ class _ZoneSelectionScreenState extends State<ZoneSelectionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _selectedIndex == null || _selectedIndex! >= _zones.length
+                  onPressed:
+                      _selectedIndex == null || _selectedIndex! >= _zones.length
                       ? null
                       : () {
                           final selectedZone = _zones[_selectedIndex!];

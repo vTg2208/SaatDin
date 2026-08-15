@@ -65,7 +65,10 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
     }
 
     final plan = InsurancePlan(
-      name: _coerceString(policy['plan'], fallback: user.plan.isEmpty ? 'Standard' : user.plan),
+      name: _coerceString(
+        policy['plan'],
+        fallback: user.plan.isEmpty ? 'Standard' : user.plan,
+      ),
       weeklyPremium: (policy['weeklyPremium'] as num? ?? 0).toInt(),
       perTriggerPayout: (policy['perTriggerPayout'] as num? ?? 0).toInt(),
       maxDaysPerWeek: (policy['maxDaysPerWeek'] as num? ?? 0).toInt(),
@@ -73,12 +76,25 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
     );
 
     final cycleStartDate = _coerceString(policy['cycleStartDate']);
-    final cycleEndDate = _coerceString(policy['cycleEndDate'], fallback: _coerceString(policy['nextBillingDate']));
-    final paidOnDate = _coerceString(policy['paidOnDate'], fallback: cycleStartDate);
+    final cycleEndDate = _coerceString(
+      policy['cycleEndDate'],
+      fallback: _coerceString(policy['nextBillingDate']),
+    );
+    final paidOnDate = _coerceString(
+      policy['paidOnDate'],
+      fallback: cycleStartDate,
+    );
     final pendingEffectiveDate = _coerceString(policy['pendingEffectiveDate']);
-    final policyStatus = _coerceString(policy['status'], fallback: '').toLowerCase();
+    final policyStatus = _coerceString(
+      policy['status'],
+      fallback: '',
+    ).toLowerCase();
     final daysLeft = (policy['daysLeft'] as num? ?? 0).toInt();
-    final amountPaidThisWeek = (policy['amountPaidThisWeek'] as num? ?? policy['weeklyPremium'] as num? ?? 0).toDouble();
+    final amountPaidThisWeek =
+        (policy['amountPaidThisWeek'] as num? ??
+                policy['weeklyPremium'] as num? ??
+                0)
+            .toDouble();
 
     String paidVia = _coerceString(payoutDashboard['primaryUpi']);
     if (paidVia.isEmpty) {
@@ -136,11 +152,15 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final inferredScheduled = _pendingEffectiveDate.isNotEmpty &&
-      DateTime.tryParse(_pendingEffectiveDate)?.toUtc().isAfter(DateTime.now().toUtc()) == true;
+    final inferredScheduled =
+        _pendingEffectiveDate.isNotEmpty &&
+        DateTime.tryParse(
+              _pendingEffectiveDate,
+            )?.toUtc().isAfter(DateTime.now().toUtc()) ==
+            true;
     final isScheduled = _policyStatus.isEmpty
-      ? inferredScheduled
-      : _policyStatus != 'active';
+        ? inferredScheduled
+        : _policyStatus != 'active';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4ED),
@@ -186,7 +206,9 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      isScheduled ? 'Your cover is inactive!' : "You're covered!",
+                      isScheduled
+                          ? 'Your cover is inactive!'
+                          : "You're covered!",
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 24,
@@ -217,10 +239,7 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
                       ),
                       child: Column(
                         children: [
-                          _DetailRow(
-                            label: 'Plan',
-                            value: _activePlan.name,
-                          ),
+                          _DetailRow(label: 'Plan', value: _activePlan.name),
                           _DetailRow(
                             label: 'Start date',
                             value: _dateLabel(_cycleStartDate),
@@ -242,10 +261,7 @@ class _CoverageStatusScreenState extends State<CoverageStatusScreen> {
                             label: 'Days left',
                             value: '$_daysLeft days',
                           ),
-                          _DetailRow(
-                            label: 'Zone',
-                            value: _zoneLabel(),
-                          ),
+                          _DetailRow(label: 'Zone', value: _zoneLabel()),
                           _DetailRow(
                             label: 'Platform',
                             value: _platformLabel(),
@@ -345,7 +361,9 @@ class _DetailRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
-          bottom: isLast ? BorderSide.none : const BorderSide(color: Color(0xFFEAE5DE)),
+          bottom: isLast
+              ? BorderSide.none
+              : const BorderSide(color: Color(0xFFEAE5DE)),
         ),
       ),
       child: Row(

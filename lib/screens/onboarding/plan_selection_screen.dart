@@ -42,10 +42,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
           ),
           content: Text(
             'You are already covered in ${worker.zone} on ${worker.platform} (${worker.plan}).\n\nContinuing will replace that profile with this new setup.',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              height: 1.4,
-            ),
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
           ),
           actions: [
             TextButton(
@@ -202,9 +199,13 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                 ? null
                                 : () async {
                                     if (phone.isEmpty) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Missing phone number. Please retry onboarding.'),
+                                          content: Text(
+                                            'Missing phone number. Please retry onboarding.',
+                                          ),
                                         ),
                                       );
                                       return;
@@ -214,8 +215,9 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                       _isProceeding = true;
                                     });
 
-                                    final canContinue = await _confirmOverwriteIfNeeded();
-                                    if (!mounted) return;
+                                    final canContinue =
+                                        await _confirmOverwriteIfNeeded();
+                                    if (!context.mounted) return;
                                     if (!canContinue) {
                                       setState(() {
                                         _isProceeding = false;
@@ -257,8 +259,8 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                                   plans.isEmpty
                                       ? 'No plans available'
                                       : _isProceeding
-                                          ? 'Checking...'
-                                          : 'Review Shield Details',
+                                      ? 'Checking...'
+                                      : 'Review Shield Details',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

@@ -20,7 +20,9 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
   List<DeliveryPlatform> _platforms = DeliveryPlatform.getPlatforms();
 
   bool get _canContinue =>
-      _selectedIndex != null && _selectedIndex! >= 0 && _selectedIndex! < _platforms.length;
+      _selectedIndex != null &&
+      _selectedIndex! >= 0 &&
+      _selectedIndex! < _platforms.length;
 
   @override
   Widget build(BuildContext context) {
@@ -107,9 +109,11 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
                       );
                     }
 
-                    final platforms = snapshot.data ?? const <DeliveryPlatform>[];
+                    final platforms =
+                        snapshot.data ?? const <DeliveryPlatform>[];
                     _platforms = platforms;
-                    if (_selectedIndex != null && _selectedIndex! >= platforms.length) {
+                    if (_selectedIndex != null &&
+                        _selectedIndex! >= platforms.length) {
                       _selectedIndex = null;
                     }
 
@@ -155,8 +159,7 @@ class _PlatformSelectionScreenState extends State<PlatformSelectionScreen> {
                             context,
                             AppRoutes.zoneSelect,
                             arguments: {
-                              'platform':
-                                  _platforms[_selectedIndex!].name,
+                              'platform': _platforms[_selectedIndex!].name,
                               'phone': phone,
                               'name': name,
                             },

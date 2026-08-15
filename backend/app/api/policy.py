@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..core.config import settings
 from ..core.db import (
     _coerce_dt,
     list_paid_premium_weeks_for_phone,
@@ -219,7 +220,7 @@ def _build_policy(worker: dict, settled_total: float, payment_rows: list[dict]) 
         weeklyPremium=selected.weeklyPremium,
         amountPaidThisWeek=amount_paid_this_week,
         earningsProtected=round(settled_total, 2),
-        parametricCoverageOn=True,
+        parametricCoverageOn=status == "active",
         perTriggerPayout=selected.perTriggerPayout,
         maxDaysPerWeek=selected.maxDaysPerWeek,
         nextBillingDate=next_billing_date.isoformat(),
@@ -296,6 +297,11 @@ async def record_premium_payment(
     payload: PremiumPaymentRecordRequest,
     worker: dict = Depends(get_current_worker),
 ) -> ApiResponse:
+    if not settings.allow_client_reported_premium_payments:
+        raise HTTPException(
+            status_code=403,
+            detail="Premium payments must be server-verified before coverage is scheduled.",
+        )
     status = payload.status.strip().lower()
     if status not in {"paid", "missed", "failed"}:
         raise HTTPException(status_code=400, detail="Invalid status. Use paid, missed, or failed")

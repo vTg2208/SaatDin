@@ -23,7 +23,8 @@ class _NameInputScreenState extends State<NameInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final phone = (args?['phone'] as String? ?? '').trim();
 
     return Scaffold(
@@ -76,7 +77,10 @@ class _NameInputScreenState extends State<NameInputScreen> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      borderSide: const BorderSide(
+                        color: AppColors.primary,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                   validator: (value) {

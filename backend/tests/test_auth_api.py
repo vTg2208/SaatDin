@@ -33,6 +33,20 @@ class AuthApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["phoneNumber"], "9876543210")
         self.assertEqual(payload["data"]["debugOtp"], "123456")
 
+    def test_send_otp_fails_when_debug_is_hidden_without_sms_provider(self) -> None:
+        client = self._client()
+        with (
+            patch("backend.app.api.auth.get_otp", new=AsyncMock(return_value=None)),
+            patch("backend.app.api.auth.save_otp", new=AsyncMock()),
+            patch("backend.app.api.auth.delete_otp", new=AsyncMock()) as delete_otp,
+            patch("backend.app.api.auth.settings.expose_debug_otp", False),
+        ):
+            response = client.post("/api/v1/auth/send-otp", json={"phoneNumber": "9876543210"})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("sms provider", response.text.lower())
+        delete_otp.assert_awaited_once_with("9876543210")
+
     def test_verify_otp_returns_access_token(self) -> None:
         client = self._client()
         phone = "9876543210"

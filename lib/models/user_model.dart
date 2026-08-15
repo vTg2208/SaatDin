@@ -26,16 +26,16 @@ class User {
   });
 
   const User.empty({this.phone = ''})
-      : name = 'SaatDin Rider',
-        platform = '',
-        zone = '',
-        zonePincode = '',
-        plan = '',
-        policyId = '',
-        totalEarnings = 0,
-        earningsProtected = 0,
-        isVerified = false,
-        language = 'English';
+    : name = 'SaatDin Rider',
+      platform = '',
+      zone = '',
+      zonePincode = '',
+      plan = '',
+      policyId = '',
+      totalEarnings = 0,
+      earningsProtected = 0,
+      isVerified = false,
+      language = 'English';
 
   static String _readString(Map<String, dynamic> json, List<String> keys) {
     for (final key in keys) {
@@ -65,13 +65,27 @@ class User {
     return User(
       name: _readString(json, const ['name']),
       phone: _readString(json, const ['phone']),
-      platform: _readString(json, const ['platform', 'platformName', 'platform_name']),
+      platform: _readString(json, const [
+        'platform',
+        'platformName',
+        'platform_name',
+      ]),
       zone: _readString(json, const ['zone', 'zoneName', 'zone_name']),
-      zonePincode: _readString(json, const ['zonePincode', 'zone_pincode', 'pincode']),
+      zonePincode: _readString(json, const [
+        'zonePincode',
+        'zone_pincode',
+        'pincode',
+      ]),
       plan: _readString(json, const ['plan', 'planName', 'plan_name']),
       policyId: _readString(json, const ['policyId', 'policy_id']),
-      totalEarnings: _readDouble(json, const ['totalEarnings', 'total_earnings']),
-      earningsProtected: _readDouble(json, const ['earningsProtected', 'earnings_protected']),
+      totalEarnings: _readDouble(json, const [
+        'totalEarnings',
+        'total_earnings',
+      ]),
+      earningsProtected: _readDouble(json, const [
+        'earningsProtected',
+        'earnings_protected',
+      ]),
       isVerified: json['isVerified'] == true,
       language: _readString(json, const ['language']).isEmpty
           ? 'English'

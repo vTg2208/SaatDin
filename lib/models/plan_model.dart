@@ -50,8 +50,14 @@ class InsurancePlan {
     return InsurancePlan(
       name: _readString(json, const ['name']),
       weeklyPremium: _readInt(json, const ['weeklyPremium', 'weekly_premium']),
-      perTriggerPayout: _readInt(json, const ['perTriggerPayout', 'per_trigger_payout']),
-      maxDaysPerWeek: _readInt(json, const ['maxDaysPerWeek', 'max_days_per_week']),
+      perTriggerPayout: _readInt(json, const [
+        'perTriggerPayout',
+        'per_trigger_payout',
+      ]),
+      maxDaysPerWeek: _readInt(json, const [
+        'maxDaysPerWeek',
+        'max_days_per_week',
+      ]),
       isPopular: _readBool(json, const ['isPopular', 'is_popular']),
     );
   }

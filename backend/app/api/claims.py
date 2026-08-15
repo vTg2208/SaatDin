@@ -23,6 +23,7 @@ from ..services.fraud_isolation import score_claim
 from ..services.gps_validation import evaluate_worker_gps_signal, gps_features_from_validation
 from ..services.motion_validation import evaluate_worker_motion_signal, motion_features_from_validation
 from ..services.premium import build_plans
+from ..services.coverage import has_active_coverage
 from ..services.tower_validation import evaluate_worker_tower_signal, tower_features_from_validation
 from ..services.trigger_monitor import calculate_zone_affinity_score, get_fraud_ring_members
 
@@ -261,6 +262,11 @@ async def get_my_claims(worker: dict = Depends(get_current_worker)) -> ApiRespon
 async def submit_claim(payload: ClaimSubmitRequest, worker: dict = Depends(get_current_worker)) -> ApiResponse:
     claim_type = _normalize_claim_type(payload.claimType)
     phone = str(worker["phone"])
+    if not await has_active_coverage(phone):
+        raise HTTPException(
+            status_code=409,
+            detail="An active policy is required to submit a claim.",
+        )
     selected_plan = _resolve_worker_plan(worker)
     max_days_per_week = max(1, int(getattr(selected_plan, "maxDaysPerWeek", 1)))
     settled_days_this_week = await count_settled_claim_days_for_phone_since(

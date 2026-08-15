@@ -81,7 +81,9 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open ${_selectedUpiApp.label}. Please check if the app is installed.'),
+            content: Text(
+              'Could not open ${_selectedUpiApp.label}. Please check if the app is installed.',
+            ),
           ),
         );
         return;
@@ -119,7 +121,8 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
         metadata: {
           'source': 'onboarding-payment-flow',
           'paymentMethod': _selectedOption.title,
-          if (_selectedOption == _PaymentOption.upi) 'upiApp': _selectedUpiApp.label,
+          if (_selectedOption == _PaymentOption.upi)
+            'upiApp': _selectedUpiApp.label,
           'plan': args.plan.name,
         },
       );
@@ -127,12 +130,15 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Payment was captured, but policy sync failed. Please retry once.'),
+          content: Text(
+            'Payment was captured, but policy sync failed. Please retry once.',
+          ),
         ),
       );
       return;
     }
 
+    if (!mounted) return;
     Navigator.pushReplacementNamed(
       context,
       AppRoutes.paymentSuccess,
@@ -140,7 +146,10 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
     );
   }
 
-  Future<bool> _launchSelectedUpiApp(PaymentFlowArguments args, double amount) async {
+  Future<bool> _launchSelectedUpiApp(
+    PaymentFlowArguments args,
+    double amount,
+  ) async {
     if (kIsWeb) {
       return false;
     }
@@ -163,28 +172,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       return true;
     }
 
-    final genericUri = Uri(
-      scheme: 'upi',
-      host: 'pay',
-      queryParameters: params,
-    );
+    final genericUri = Uri(scheme: 'upi', host: 'pay', queryParameters: params);
     return launchUrl(genericUri, mode: LaunchMode.externalApplication);
   }
 
   Uri _buildAppSpecificUpiUri(Map<String, String> params) {
     switch (_selectedUpiApp) {
       case _UpiApp.paytm:
-        return Uri(
-          scheme: 'paytmmp',
-          host: 'pay',
-          queryParameters: params,
-        );
+        return Uri(scheme: 'paytmmp', host: 'pay', queryParameters: params);
       case _UpiApp.phonepe:
-        return Uri(
-          scheme: 'phonepe',
-          host: 'pay',
-          queryParameters: params,
-        );
+        return Uri(scheme: 'phonepe', host: 'pay', queryParameters: params);
       case _UpiApp.googlePay:
         return Uri(
           scheme: 'tez',
@@ -193,11 +190,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
           queryParameters: params,
         );
       case _UpiApp.custom:
-        return Uri(
-          scheme: 'upi',
-          host: 'pay',
-          queryParameters: params,
-        );
+        return Uri(scheme: 'upi', host: 'pay', queryParameters: params);
     }
   }
 
@@ -224,7 +217,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
             top: -60,
             left: -40,
             child: _BackgroundOrb(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha: 0.08),
               size: 180,
             ),
           ),
@@ -232,7 +225,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
             bottom: 110,
             right: -50,
             child: _BackgroundOrb(
-              color: AppColors.accent.withOpacity(0.08),
+              color: AppColors.accent.withValues(alpha: 0.08),
               size: 200,
             ),
           ),
@@ -293,11 +286,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                           upiIdController: _upiIdController,
                           commonUpiHandles: _commonUpiHandles,
                           onUpiHandleTap: (handle) {
-                            final next = _withSelectedHandle(_upiIdController.text, handle);
+                            final next = _withSelectedHandle(
+                              _upiIdController.text,
+                              handle,
+                            );
                             setState(() {
                               _upiIdController.value = TextEditingValue(
                                 text: next,
-                                selection: TextSelection.collapsed(offset: next.length),
+                                selection: TextSelection.collapsed(
+                                  offset: next.length,
+                                ),
                               );
                             });
                           },
@@ -309,15 +307,18 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.accent.withOpacity(0.12),
+                              color: AppColors.accent.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(color: AppColors.border),
                             ),
                             child: const Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.trending_up_rounded,
-                                    color: AppColors.accent, size: 20),
+                                Icon(
+                                  Icons.trending_up_rounded,
+                                  color: AppColors.accent,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -605,7 +606,9 @@ class _UpiDetailsForm extends StatelessWidget {
   List<Widget> _buildUpiAppOptions() {
     final widgets = <Widget>[];
 
-    for (final app in _UpiApp.values.where((value) => value != _UpiApp.custom)) {
+    for (final app in _UpiApp.values.where(
+      (value) => value != _UpiApp.custom,
+    )) {
       final isSelected = app == selectedUpiApp;
 
       widgets.add(
@@ -681,10 +684,7 @@ class _ProceedToPaymentButton extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               isProcessing ? 'Setting up cover...' : label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -697,10 +697,7 @@ class _CustomUpiBox extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _CustomUpiBox({
-    required this.selected,
-    required this.onTap,
-  });
+  const _CustomUpiBox({required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -712,7 +709,9 @@ class _CustomUpiBox extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppColors.cardSelectedBackground : AppColors.surfaceLight,
+          color: selected
+              ? AppColors.cardSelectedBackground
+              : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.borderLight,
@@ -721,11 +720,7 @@ class _CustomUpiBox extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const SizedBox(
-              width: 34,
-              height: 34,
-              child: _CustomUpiLogo(),
-            ),
+            const SizedBox(width: 34, height: 34, child: _CustomUpiLogo()),
             const SizedBox(width: 14),
             const Expanded(
               child: Column(
@@ -751,10 +746,7 @@ class _CustomUpiBox extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(
-                Icons.check_circle_rounded,
-                color: AppColors.primary,
-              ),
+              const Icon(Icons.check_circle_rounded, color: AppColors.primary),
           ],
         ),
       ),
@@ -783,7 +775,9 @@ class _UpiAppChip extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppColors.cardSelectedBackground : AppColors.surfaceLight,
+          color: selected
+              ? AppColors.cardSelectedBackground
+              : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.borderLight,
@@ -792,11 +786,7 @@ class _UpiAppChip extends StatelessWidget {
         ),
         child: Row(
           children: [
-            SizedBox(
-              width: 34,
-              height: 34,
-              child: app.icon,
-            ),
+            SizedBox(width: 34, height: 34, child: app.icon),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -822,10 +812,7 @@ class _UpiAppChip extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(
-                Icons.check_circle_rounded,
-                color: AppColors.primary,
-              ),
+              const Icon(Icons.check_circle_rounded, color: AppColors.primary),
           ],
         ),
       ),
@@ -1036,16 +1023,8 @@ class _CardBrandChip extends StatelessWidget {
                     ),
                   )
                 : isSvg
-                    ? SvgPicture.asset(
-                        assetPath!,
-                        height: 24,
-                        fit: BoxFit.contain,
-                      )
-                    : Image.asset(
-                        assetPath!,
-                        height: 24,
-                        fit: BoxFit.contain,
-                      ),
+                ? SvgPicture.asset(assetPath!, height: 24, fit: BoxFit.contain)
+                : Image.asset(assetPath!, height: 24, fit: BoxFit.contain),
           ),
         ),
       ),
@@ -1077,10 +1056,7 @@ class _PaymentInputField extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       textCapitalization: textCapitalization,
-      style: const TextStyle(
-        fontSize: 14,
-        color: AppColors.textPrimary,
-      ),
+      style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -1088,7 +1064,10 @@ class _PaymentInputField extends StatelessWidget {
         labelStyle: const TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.background,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: AppColors.borderLight),
@@ -1121,7 +1100,7 @@ class _AmountCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -1136,7 +1115,7 @@ class _AmountCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
+                  color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -1165,25 +1144,27 @@ class _AmountCard extends StatelessWidget {
                         color: AppColors.textSecondary,
                       ),
                     ),
-                    if (args.loyaltyDiscountPercent > 0) ...
-                      [
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${args.loyaltyDiscountPercent.toStringAsFixed(0)}% loyalty discount',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.success,
-                            ),
+                    if (args.loyaltyDiscountPercent > 0) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${args.loyaltyDiscountPercent.toStringAsFixed(0)}% loyalty discount',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.success,
                           ),
                         ),
-                      ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1209,7 +1190,9 @@ class _AmountCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${(args.plan.weeklyPremium * (1 - args.loyaltyDiscountPercent / 100)).toStringAsFixed(0)}',
+                        (args.plan.weeklyPremium *
+                                (1 - args.loyaltyDiscountPercent / 100))
+                            .toStringAsFixed(0),
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w700,
@@ -1287,14 +1270,16 @@ class _PaymentMethods extends StatelessWidget {
                         height: 44,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.primary.withOpacity(0.12)
+                              ? AppColors.primary.withValues(alpha: 0.12)
                               : AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Center(
                           child: IconTheme(
                             data: IconThemeData(
-                              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
                               size: 22,
                             ),
                             child: option.icon,
@@ -1417,10 +1402,7 @@ class _BackgroundOrb extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }

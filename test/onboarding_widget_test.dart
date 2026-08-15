@@ -11,12 +11,10 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('welcome screen enables continue for a valid phone number', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: WelcomeScreen(),
-      ),
-    );
+  testWidgets('welcome screen enables continue for a valid phone number', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: WelcomeScreen()));
 
     expect(find.text('Continue'), findsOneWidget);
     expect(find.text('Enter mobile number'), findsOneWidget);

@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import AsyncMock, patch
 
-from backend.app.services.payouts import mask_upi_id, validate_upi_id
+from backend.app.services.payouts import initiate_claim_payout, mask_upi_id, validate_upi_id
 
 
 class UpiValidationTests(unittest.TestCase):
@@ -40,6 +41,63 @@ class UpiMaskingTests(unittest.TestCase):
 
     def test_mask_empty_returns_empty(self) -> None:
         self.assertEqual(mask_upi_id(""), "")
+
+
+class PayoutCoverageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_payout_rejects_worker_without_active_coverage(self) -> None:
+        worker = {
+            "phone": "9999999999",
+            "platform_name": "Blinkit",
+            "zone_pincode": "560001",
+            "plan_name": "Standard",
+            "payout_primary_upi": "9999999999@upi",
+            "payout_primary_verified": 1,
+        }
+        claim = {
+            "id": 17,
+            "amount": 400.0,
+            "created_at": "2026-08-15T12:00:00+00:00",
+        }
+        selected_plan = type("Plan", (), {"name": "Standard", "maxDaysPerWeek": 3})
+        with (
+            patch("backend.app.services.payouts._selected_plan_for_worker", return_value=selected_plan),
+            patch(
+                "backend.app.core.db.list_paid_premium_weeks_for_phone",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "backend.app.services.payouts.count_settled_claim_days_for_phone_since",
+                new=AsyncMock(return_value=0),
+            ),
+            patch(
+                "backend.app.services.payouts.create_payout_transfer",
+                new=AsyncMock(return_value={"id": 91}),
+            ),
+            patch(
+                "backend.app.services.payouts.set_claim_payout_transfer",
+                new=AsyncMock(),
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "active policy"):
+                await initiate_claim_payout(claim=claim, worker=worker)
+
+    async def test_payout_rejects_unverified_upi_account(self) -> None:
+        worker = {
+            "phone": "9999999999",
+            "platform_name": "Blinkit",
+            "zone_pincode": "560001",
+            "plan_name": "Standard",
+            "payout_primary_upi": "9999999999@upi",
+            "payout_primary_verified": 0,
+        }
+        claim = {
+            "id": 18,
+            "amount": 400.0,
+            "created_at": "2026-08-15T12:00:00+00:00",
+        }
+
+        with self.assertRaisesRegex(ValueError, "verified payout UPI"):
+            await initiate_claim_payout(claim=claim, worker=worker)
 
 
 if __name__ == "__main__":

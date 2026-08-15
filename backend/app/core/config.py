@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "SaatDin API"
     app_version: str = "0.2.0"
+    app_environment: str = "development"
 
     base_rate: float = 45.0
     jwt_secret: str = "replace-me-in-env"
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 5
     otp_send_cooldown_seconds: int = 30
     expose_debug_otp: bool = True
+    sms_provider: str = "stub"
 
     supabase_db_url: str = ""
 
@@ -29,6 +31,7 @@ class Settings(BaseSettings):
 
     trigger_poll_minutes: int = 15
     trigger_window_sample_slack: int = 1
+    allow_static_trigger_fallback: bool = False
 
     # Fraud scoring (Isolation Forest)
     fraud_scoring_enabled: bool = True
@@ -36,9 +39,6 @@ class Settings(BaseSettings):
     fraud_anomaly_threshold: float = -0.05
     fraud_fail_open: bool = True
     fraud_metrics_log_every_n: int = 25
-
-    # Backward compatibility for older test fixtures that still patch a local DB path.
-    database_path: str = ""
 
     # Ambiguous-case LLM fallback (LangGraph + provider failover)
     fraud_llm_fallback_enabled: bool = True
@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     payout_provider_mode: str = "sandbox"
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
+    allow_client_reported_premium_payments: bool = True
 
     # Adversarial defense — claim velocity spike detection
     claim_velocity_spike_threshold: int = 15
@@ -211,10 +212,6 @@ class Settings(BaseSettings):
         return candidates[0]
 
     @property
-    def database_url(self) -> str:
-        return self.supabase_db_url or self.database_path
-
-    @property
     def fraud_llm_provider_sequence(self) -> List[str]:
         parts = [item.strip().lower() for item in self.fraud_llm_provider_order.split(",") if item.strip()]
         sequence: list[str] = []
@@ -235,3 +232,50 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def validate_runtime_settings(runtime_settings: Any = settings) -> None:
+    environment = str(getattr(runtime_settings, "app_environment", "development")).strip().lower()
+    payout_mode = str(getattr(runtime_settings, "payout_provider_mode", "sandbox")).strip().lower()
+    errors: list[str] = []
+
+    if payout_mode != "sandbox":
+        errors.append("PAYOUT_PROVIDER_MODE must remain sandbox until a live payout adapter is implemented")
+
+    if environment not in {"production", "prod"}:
+        if errors:
+            raise RuntimeError("Unsafe runtime configuration: " + "; ".join(errors))
+        return
+
+    jwt_secret = str(getattr(runtime_settings, "jwt_secret", ""))
+    admin_password = str(getattr(runtime_settings, "admin_password", ""))
+    cors_origins = [str(item).lower() for item in getattr(runtime_settings, "cors_origins", [])]
+    cors_regex = str(getattr(runtime_settings, "cors_allow_origin_regex", "")).lower()
+
+    if not str(getattr(runtime_settings, "supabase_db_url", "")).strip():
+        errors.append("SUPABASE_DB_URL is required")
+    if jwt_secret == "replace-me-in-env" or len(jwt_secret) < 32:
+        errors.append("JWT_SECRET must be a unique value of at least 32 characters")
+    if bool(getattr(runtime_settings, "expose_debug_otp", True)):
+        errors.append("EXPOSE_DEBUG_OTP must be false")
+    sms_provider = str(getattr(runtime_settings, "sms_provider", "stub")).strip().lower()
+    errors.append(
+        "a production SMS provider adapter must be implemented"
+        if sms_provider == "stub"
+        else f"SMS_PROVIDER={sms_provider!r} has no implemented adapter"
+    )
+    if str(getattr(runtime_settings, "admin_username", "admin")).strip().lower() == "admin":
+        errors.append("ADMIN_USERNAME must not use the default")
+    if not admin_password.startswith("pbkdf2_sha256$"):
+        errors.append("ADMIN_PASSWORD must be stored as a PBKDF2 hash")
+    if bool(getattr(runtime_settings, "allow_client_reported_premium_payments", True)):
+        errors.append("ALLOW_CLIENT_REPORTED_PREMIUM_PAYMENTS must be false")
+    if bool(getattr(runtime_settings, "allow_static_trigger_fallback", True)):
+        errors.append("ALLOW_STATIC_TRIGGER_FALLBACK must be false")
+    if any("localhost" in origin or "127.0.0.1" in origin for origin in cors_origins):
+        errors.append("CORS_ORIGINS must not contain local development origins")
+    if "localhost" in cors_regex or "127\\.0\\.0\\.1" in cors_regex:
+        errors.append("CORS_ALLOW_ORIGIN_REGEX must not allow local development origins")
+
+    if errors:
+        raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))

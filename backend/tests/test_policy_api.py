@@ -100,15 +100,39 @@ class PolicyPlanUpdateTests(unittest.TestCase):
 
 
 class PremiumPaymentTests(unittest.TestCase):
+    def test_record_payment_rejects_client_report_when_disabled(self) -> None:
+        client = _build_client()
+        token = create_access_token("9876543210")
+        with (
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
+            patch.dict(
+                "backend.app.core.config.settings.__dict__",
+                {"allow_client_reported_premium_payments": False},
+            ),
+            patch("backend.app.api.policy.upsert_premium_payment_week", new=AsyncMock()),
+            patch("backend.app.api.policy.set_pending_worker_plan", new=AsyncMock()),
+            patch("backend.app.api.policy.total_settled_amount_for_phone", new=AsyncMock(return_value=0.0)),
+            patch("backend.app.api.policy.list_paid_premium_weeks_for_phone", new=AsyncMock(return_value=[])),
+        ):
+            response = client.post(
+                "/api/v1/policy/premium-payment",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json={"amount": 60, "status": "paid"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("server-verified", response.text.lower())
+
     def test_record_payment_schedules_next_week_cycle(self) -> None:
         client = _build_client()
         token = create_access_token("9876543210")
-        next_cycle_start = date(2026, 4, 20)
+        now = datetime.now(timezone.utc)
+        next_cycle_start = (now.date() - timedelta(days=now.weekday())) + timedelta(days=7)
 
         with (
             patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
             patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
-            patch("backend.app.api.policy._next_week_start_utc", return_value=datetime(2026, 4, 20, 0, 1, tzinfo=timezone.utc)),
             patch("backend.app.api.policy.resolve_zone", return_value=("560103", {"name": "Bellandur", "zone_risk_multiplier": 1.0})),
             patch("backend.app.api.policy.build_plans", return_value=[
                 type("Plan", (), {"name": "Basic", "weeklyPremium": 35, "perTriggerPayout": 250, "maxDaysPerWeek": 2}),
@@ -131,9 +155,10 @@ class PremiumPaymentTests(unittest.TestCase):
         self.assertTrue(payload["success"])
         data = payload["data"]
         self.assertEqual(data["status"], "scheduled")
-        self.assertEqual(data["cycleStartDate"], "2026-04-20")
-        self.assertEqual(data["cycleEndDate"], "2026-04-26")
+        self.assertEqual(data["cycleStartDate"], next_cycle_start.isoformat())
+        self.assertEqual(data["cycleEndDate"], (next_cycle_start + timedelta(days=6)).isoformat())
         self.assertEqual(data["amountPaidThisWeek"], 0.0)
+        self.assertFalse(data["parametricCoverageOn"])
 
 
 if __name__ == "__main__":

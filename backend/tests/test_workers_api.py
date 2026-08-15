@@ -80,7 +80,7 @@ class WorkerProfileTests(unittest.TestCase):
         client = _build_client()
         token = create_access_token("9876543210")
         with (
-            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.api.workers.get_worker", new=AsyncMock(return_value=_WORKER)),
             patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
             patch("backend.app.api.workers.total_settled_amount_for_phone", new=AsyncMock(return_value=1200.0)),
         ):
@@ -129,6 +129,7 @@ class WorkerRegistrationTests(unittest.TestCase):
         token = create_access_token("9876543210")
         with (
             patch("backend.app.api.workers.upsert_worker", new=AsyncMock()),
+            patch("backend.app.api.workers.set_pending_worker_plan", new=AsyncMock()),
             patch("backend.app.api.workers.get_worker", new=AsyncMock(return_value=_WORKER)),
         ):
             response = client.post(

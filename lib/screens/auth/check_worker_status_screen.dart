@@ -8,7 +8,8 @@ class CheckWorkerStatusScreen extends StatefulWidget {
   const CheckWorkerStatusScreen({super.key});
 
   @override
-  State<CheckWorkerStatusScreen> createState() => _CheckWorkerStatusScreenState();
+  State<CheckWorkerStatusScreen> createState() =>
+      _CheckWorkerStatusScreenState();
 }
 
 class _CheckWorkerStatusScreenState extends State<CheckWorkerStatusScreen> {
@@ -21,7 +22,8 @@ class _CheckWorkerStatusScreenState extends State<CheckWorkerStatusScreen> {
   }
 
   Future<void> _resolveFlow() async {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final incomingPhone = (args?['phone'] as String? ?? '').trim();
 
     final status = await _apiService.getWorkerStatus();
@@ -62,10 +64,7 @@ class _CheckWorkerStatusScreenState extends State<CheckWorkerStatusScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/gig.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/gig.png', fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(
@@ -81,7 +80,9 @@ class _CheckWorkerStatusScreenState extends State<CheckWorkerStatusScreen> {
                   height: 44,
                   child: CircularProgressIndicator(
                     strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
                   ),
                 ),
                 SizedBox(height: 16),

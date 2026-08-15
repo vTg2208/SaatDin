@@ -12,12 +12,10 @@ void main() {
   });
 
   testWidgets('zone lock report validates required fields', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: ZoneLockReportScreen(),
-      ),
-    );
+    await tester.pumpWidget(const MaterialApp(home: ZoneLockReportScreen()));
+    await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Submit ZoneLock Report'));
     await tester.tap(find.text('Submit ZoneLock Report'));
     await tester.pump();
 

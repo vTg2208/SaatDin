@@ -18,6 +18,7 @@ from ..core.db import (
 from ..core.zone_cache import resolve_zone
 from ..models.platform import Platform
 from .premium import build_plans
+from .coverage import has_active_coverage
 
 _UPI_PATTERN = re.compile(r"^[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}$")
 
@@ -57,9 +58,9 @@ def _transfer_summary(row: Dict[str, Any]) -> Dict[str, Any]:
 def _preferred_upi(worker: Dict[str, Any]) -> Optional[str]:
     primary = str(worker.get("payout_primary_upi") or "").strip()
     backup = str(worker.get("payout_backup_upi") or "").strip()
-    if primary:
+    if primary and bool(worker.get("payout_primary_verified")):
         return primary
-    if backup:
+    if backup and bool(worker.get("payout_backup_verified")):
         return backup
     return None
 
@@ -169,12 +170,14 @@ async def initiate_claim_payout(
 
     upi_id = _preferred_upi(worker)
     if not upi_id or not validate_upi_id(upi_id):
-        raise ValueError("No valid payout UPI is configured for the worker")
+        raise ValueError("No verified payout UPI is configured for the worker")
 
     selected = _selected_plan_for_worker(worker)
     claim_created_at = datetime.fromisoformat(str(claim.get("created_at")))
     if claim_created_at.tzinfo is None:
         claim_created_at = claim_created_at.replace(tzinfo=timezone.utc)
+    if not await has_active_coverage(str(worker["phone"]), claim_created_at):
+        raise ValueError("An active policy is required for claim payout")
     week_start = _current_week_start_utc(claim_created_at)
     settled_days_this_week = await count_settled_claim_days_for_phone_since(str(worker["phone"]), week_start)
     if settled_days_this_week >= max(1, int(selected.maxDaysPerWeek)):

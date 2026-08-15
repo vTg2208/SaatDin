@@ -34,12 +34,17 @@ class PaymentConfirmScreen extends StatelessWidget {
           Positioned(
             top: -60,
             right: -40,
-            child: _BackgroundOrb(color: AppColors.primary.withOpacity(0.08)),
+            child: _BackgroundOrb(
+              color: AppColors.primary.withValues(alpha: 0.08),
+            ),
           ),
           Positioned(
             bottom: 120,
             left: -50,
-            child: _BackgroundOrb(color: AppColors.accent.withOpacity(0.08), size: 180),
+            child: _BackgroundOrb(
+              color: AppColors.accent.withValues(alpha: 0.08),
+              size: 180,
+            ),
           ),
           SafeArea(
             child: Padding(
@@ -69,7 +74,8 @@ class PaymentConfirmScreen extends StatelessWidget {
                       color: AppColors.textSecondary,
                       height: 1.4,
                     ),
-                  ),                  const SizedBox(height: 20),
+                  ),
+                  const SizedBox(height: 20),
                   Expanded(
                     child: ListView(
                       children: [
@@ -79,7 +85,8 @@ class PaymentConfirmScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         const _NoteCard(
                           title: 'Weekly debit',
-                          text: 'Your cover begins on the next weekly cycle. You can cancel anytime from Home.',
+                          text:
+                              'Your cover begins on the next weekly cycle. You can cancel anytime from Home.',
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
@@ -145,7 +152,7 @@ class _SummaryCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -163,9 +170,12 @@ class _SummaryCard extends StatelessWidget {
                   children: [
                     if (args.plan.isPopular)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.12),
+                          color: AppColors.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: const Text(
@@ -247,10 +257,7 @@ class _SummaryCard extends StatelessWidget {
                 icon: Icons.event_available_rounded,
                 label: '${args.plan.maxDaysPerWeek} days/week',
               ),
-              _Chip(
-                icon: Icons.lock_rounded,
-                label: 'Auto-debit enabled',
-              ),
+              _Chip(icon: Icons.lock_rounded, label: 'Auto-debit enabled'),
             ],
           ),
         ],
@@ -285,7 +292,10 @@ class _DetailsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          _DetailRow(label: 'Name', value: args.name.isEmpty ? 'Your profile' : args.name),
+          _DetailRow(
+            label: 'Name',
+            value: args.name.isEmpty ? 'Your profile' : args.name,
+          ),
           _DetailRow(label: 'Phone', value: args.phone),
           _DetailRow(label: 'Platform', value: args.platform),
           _DetailRow(label: 'Zone', value: args.locationLabel),
@@ -326,7 +336,7 @@ class _NoteCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.12),
+              color: AppColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -482,10 +492,7 @@ class _BackgroundOrb extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }

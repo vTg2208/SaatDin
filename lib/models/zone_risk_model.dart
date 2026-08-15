@@ -32,7 +32,8 @@ class ZoneRisk {
   });
 
   factory ZoneRisk.fromJson(String pincode, Map<String, dynamic> json) {
-    final coordinates = (json['coordinates_approx'] as Map<String, dynamic>? ?? {});
+    final coordinates =
+        (json['coordinates_approx'] as Map<String, dynamic>? ?? {});
     final stores = (json['dark_stores'] as Map<String, dynamic>? ?? {});
 
     return ZoneRisk(
@@ -45,10 +46,12 @@ class ZoneRisk {
       swiggyInstamart: stores['Swiggy_Instamart'] == true,
       floodRiskScore: (json['flood_risk_score'] as num? ?? 0).toDouble(),
       aqiRiskScore: (json['aqi_risk_score'] as num? ?? 0).toDouble(),
-      trafficCongestionScore:
-          (json['traffic_congestion_score'] as num? ?? 0).toDouble(),
-      compositeRiskScore: (json['composite_risk_score'] as num? ?? 0).toDouble(),
-      zoneRiskMultiplier: (json['zone_risk_multiplier'] as num? ?? 1).toDouble(),
+      trafficCongestionScore: (json['traffic_congestion_score'] as num? ?? 0)
+          .toDouble(),
+      compositeRiskScore: (json['composite_risk_score'] as num? ?? 0)
+          .toDouble(),
+      zoneRiskMultiplier: (json['zone_risk_multiplier'] as num? ?? 1)
+          .toDouble(),
       riskTier: (json['risk_tier'] as String? ?? 'MEDIUM').trim(),
       customRainLockThresholdMm3hr:
           (json['custom_rainlock_threshold_mm_3hr'] as num? ?? 35).toInt(),

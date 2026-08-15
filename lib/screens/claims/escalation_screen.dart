@@ -83,10 +83,7 @@ class _EscalationSheetBodyState extends State<_EscalationSheetBody>
     try {
       // Escalation is represented as a new claim of the same type with an
       // escalation prefix, hooking into the existing submit endpoint.
-      await _apiService.escalateClaim(
-        claimId: widget.claim.id,
-        reason: reason,
-      );
+      await _apiService.escalateClaim(claimId: widget.claim.id, reason: reason);
 
       if (!mounted) return;
       setState(() => _state = _EscalateState.success);
@@ -126,9 +123,7 @@ class _EscalationSheetBodyState extends State<_EscalationSheetBody>
         20,
         math.max(20.0, MediaQuery.of(context).viewInsets.bottom + 20),
       ),
-      child: _state == _EscalateState.success
-          ? _buildSuccess()
-          : _buildForm(),
+      child: _state == _EscalateState.success ? _buildSuccess() : _buildForm(),
     );
   }
 
@@ -226,8 +221,7 @@ class _EscalationSheetBodyState extends State<_EscalationSheetBody>
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color:
-                            sel ? AppColors.error : AppColors.textSecondary,
+                        color: sel ? AppColors.error : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -250,8 +244,7 @@ class _EscalationSheetBodyState extends State<_EscalationSheetBody>
               controller: _reasonController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText:
-                    'Describe why this claim needs escalation…',
+                hintText: 'Describe why this claim needs escalation…',
                 hintStyle: const TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 13,
@@ -286,8 +279,9 @@ class _EscalationSheetBodyState extends State<_EscalationSheetBody>
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed:
-                        isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed: isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -391,8 +385,7 @@ class _SlaBanner extends StatelessWidget {
   final Claim claim;
 
   String get _slaMessage {
-    final daysSinceSubmit =
-        DateTime.now().difference(claim.date).inDays;
+    final daysSinceSubmit = DateTime.now().difference(claim.date).inDays;
     if (daysSinceSubmit >= 7) {
       return 'This claim is ${daysSinceSubmit}d old. '
           'You are eligible for priority escalation.';

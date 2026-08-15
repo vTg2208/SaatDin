@@ -56,7 +56,7 @@ Create environment config for the current Supabase/Postgres-backed backend:
 copy backend/.env.example backend/.env
 ```
 
-Edit `backend/.env` if you want to override defaults:
+Edit `backend/.env`; the database URL is required:
 
 ```env
 SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
@@ -65,6 +65,9 @@ FRAUD_MODEL_PATH=backend/models/fraud/fraud_iforest_latest.joblib
 FRAUD_ANOMALY_THRESHOLD=-0.05
 FRAUD_FAIL_OPEN=true
 ```
+
+The backend creates and verifies its PostgreSQL tables during startup. A blank
+`SUPABASE_DB_URL` is rejected.
 
 Optional: migrate legacy local SQLite data into Supabase once you need a hosted database:
 
@@ -85,7 +88,9 @@ python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Backend base URL expected by app:
-- http://localhost:8000/api/v1
+- Web, Windows, and iOS simulator: `http://localhost:8000/api/v1`
+- Android emulator: `http://10.0.2.2:8000/api/v1`
+- Physical device: `http://<development-machine-LAN-IP>:8000/api/v1`
 
 ## 5. Verify Backend Is Running
 
@@ -110,7 +115,7 @@ Expected response:
 - GET /api/v1/zones
 - GET /api/v1/zones/{pincode}
 - GET /api/v1/plans?zone={zone}&platform={platform}
-- POST /api/v1/workers/register
+- POST /api/v1/register
 - GET /api/v1/workers/status
 - GET /api/v1/workers/me
 - PUT /api/v1/workers/me
@@ -139,10 +144,10 @@ python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 2. Terminal B (flutter):
 
 ```powershell
-flutter run
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
 ```
 
-The app uses the local backend directly. Admin review is available at `http://127.0.0.1:8000/admin/dashboard` with default credentials `admin` / `saatdin-local`.
+The example command targets an Android emulator. Admin review is available at `http://127.0.0.1:8000/admin/dashboard` with development credentials `admin` / `saatdin-local`.
 
 Optional one-command Windows helper:
 
@@ -170,8 +175,15 @@ python -m pip install -r backend/requirements.txt --upgrade
 
 ### App cannot reach backend
 - Ensure backend is running on 127.0.0.1:8000
-- Verify ApiService baseUrl is http://localhost:8000/api/v1
-- On emulator/device, localhost mapping may differ
+- Pass the correct URL with `--dart-define=API_BASE_URL=...`
+- Use `10.0.2.2` for an Android emulator; use the development machine's LAN IP for a physical device
+
+### Android release signing
+
+Create an upload keystore, copy `android/key.properties.example` to
+`android/key.properties`, and replace every placeholder. The real properties file
+and keystore must stay out of version control. Release builds are not signed when
+that file is absent.
 
 ## 9. Useful Dev Commands
 
@@ -187,7 +199,8 @@ python backend/scripts/train_isolation_forest.py --output-dir backend/models/fra
 - Zone and risk data are currently loaded from assets/data/zone_risk_runtime.json.
 - Dynamic onboarding, claims, escalations, payouts, admin review, and mobile signal ingestion are integrated.
 - The live backend is Supabase/Postgres-backed; SQLite migration remains a legacy path only.
-- Archival exports move closed-week data into S3-compatible cold storage and BigQuery for historical analysis.
+- S3-compatible archival and BigQuery mirroring are planned; no archival job is implemented yet.
+- OTP delivery, premium collection, UPI verification, and payouts are development simulations. Production mode intentionally refuses unsafe defaults; provider callbacks must be implemented before launch.
 
 ## 11. Co-Claim Cluster Risk Scoring (Ops)
 

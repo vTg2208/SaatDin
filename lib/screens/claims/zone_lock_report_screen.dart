@@ -94,9 +94,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
         'Details: ${_descriptionController.text.trim()}';
 
     try {
-      await _apiService.submitZoneLockReport(
-        description: description,
-      );
+      await _apiService.submitZoneLockReport(description: description);
 
       if (!mounted) return;
       setState(() => _submitState = _SubmitState.success);
@@ -143,20 +141,29 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
       final planName = (policy['plan'] as String? ?? 'Current plan').trim();
 
       final nowUtc = DateTime.now().toUtc();
-      final weekStartUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day)
-          .subtract(Duration(days: nowUtc.weekday - 1));
+      final weekStartUtc = DateTime.utc(
+        nowUtc.year,
+        nowUtc.month,
+        nowUtc.day,
+      ).subtract(Duration(days: nowUtc.weekday - 1));
 
       final settledDayKeys = <String>{};
       for (final claim in claims) {
         if (claim.status != ClaimStatus.settled) continue;
         final claimUtc = claim.date.toUtc();
         if (claimUtc.isBefore(weekStartUtc)) continue;
-        settledDayKeys.add('${claimUtc.year}-${claimUtc.month}-${claimUtc.day}');
+        settledDayKeys.add(
+          '${claimUtc.year}-${claimUtc.month}-${claimUtc.day}',
+        );
       }
 
       final settledDaysThisWeek = settledDayKeys.length;
-      final reachedCap = maxDaysPerWeek > 0 && settledDaysThisWeek >= maxDaysPerWeek;
-      final coveredDaysLeft = (maxDaysPerWeek - settledDaysThisWeek).clamp(0, maxDaysPerWeek);
+      final reachedCap =
+          maxDaysPerWeek > 0 && settledDaysThisWeek >= maxDaysPerWeek;
+      final coveredDaysLeft = (maxDaysPerWeek - settledDaysThisWeek).clamp(
+        0,
+        maxDaysPerWeek,
+      );
       final message = reachedCap
           ? 'Weekly cap reached for $planName ($maxDaysPerWeek covered days/week). New ZoneLock reports can be submitted after weekly reset.'
           : 'Coverage left this week: $coveredDaysLeft of $maxDaysPerWeek days on $planName.';
@@ -173,10 +180,11 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
         _weeklyCapMessage = '';
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isCapStateLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isCapStateLoading = false;
+        });
+      }
     }
   }
 
@@ -317,9 +325,13 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        _weeklyCapReached ? Icons.warning_amber_rounded : Icons.info_outline,
+                        _weeklyCapReached
+                            ? Icons.warning_amber_rounded
+                            : Icons.info_outline,
                         size: 18,
-                        color: _weeklyCapReached ? AppColors.warning : AppColors.info,
+                        color: _weeklyCapReached
+                            ? AppColors.warning
+                            : AppColors.info,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -344,8 +356,9 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
               controller: _locationController,
               hint: 'e.g. Koramangala, Zone-4',
               icon: Icons.location_on_outlined,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Location is required' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Location is required'
+                  : null,
             ),
             const SizedBox(height: 20),
 
@@ -368,9 +381,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                       color: sel ? AppColors.primary : AppColors.surfaceLight,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: sel
-                            ? AppColors.primary
-                            : AppColors.border,
+                        color: sel ? AppColors.primary : AppColors.border,
                       ),
                     ),
                     child: Text(
@@ -378,8 +389,7 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color:
-                            sel ? Colors.white : AppColors.textSecondary,
+                        color: sel ? Colors.white : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -396,8 +406,8 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                 final color = imp == 'Critical'
                     ? AppColors.error
                     : imp == 'Full'
-                        ? AppColors.warning
-                        : AppColors.primary;
+                    ? AppColors.warning
+                    : AppColors.primary;
                 return Padding(
                   padding: const EdgeInsets.only(right: 10),
                   child: GestureDetector(
@@ -440,10 +450,9 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
               hint: 'Explain the zone block situation in detail…',
               icon: Icons.edit_note,
               maxLines: 4,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty)
-                      ? 'Description is required'
-                      : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Description is required'
+                  : null,
             ),
             const SizedBox(height: 32),
 
@@ -483,7 +492,10 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: (isLoading || _isCapStateLoading || _weeklyCapReached) ? null : _submit,
+                onPressed:
+                    (isLoading || _isCapStateLoading || _weeklyCapReached)
+                    ? null
+                    : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -502,13 +514,13 @@ class _ZoneLockReportScreenState extends State<ZoneLockReportScreen>
                         ),
                       )
                     : _isCapStateLoading
-                        ? const Text(
-                            'Checking limits...',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          )
+                    ? const Text(
+                        'Checking limits...',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
                     : const Text(
                         'Submit ZoneLock Report',
                         style: TextStyle(
@@ -679,8 +691,7 @@ class _ZoneLockHeaderPainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [Color(0xFFE7F8F6), Color(0xFFF0F9F8), Color(0xFFF8FBFF)],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
     final shapePaint = Paint()
       ..color = AppColors.primary.withValues(alpha: 0.08);
@@ -698,9 +709,15 @@ class _ZoneLockHeaderPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..color = AppColors.primary.withValues(alpha: 0.12);
     canvas.drawCircle(
-        Offset(size.width * 0.85, size.height * 0.2), 40, ringPaint);
+      Offset(size.width * 0.85, size.height * 0.2),
+      40,
+      ringPaint,
+    );
     canvas.drawCircle(
-        Offset(size.width * 0.1, size.height * 0.6), 28, ringPaint);
+      Offset(size.width * 0.1, size.height * 0.6),
+      28,
+      ringPaint,
+    );
   }
 
   @override

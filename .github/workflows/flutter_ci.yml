@@ -25,7 +25,6 @@ jobs:
       - name: Run backend tests
         run: python -m pytest backend/tests/ -v --tb=short
         env:
-          DATABASE_PATH: ":memory:"
           JWT_SECRET: ci-test-secret
           EXPOSE_DEBUG_OTP: "true"
           FRAUD_SCORING_ENABLED: "false"

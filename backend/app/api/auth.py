@@ -27,8 +27,13 @@ def _parse_dt(value: Any) -> datetime:
 
 
 async def _send_sms(phone_number: str, otp: str) -> None:
-    # Integrate Twilio/MSG91 or another SMS provider here.
     _ = (phone_number, otp)
+    if settings.sms_provider == "stub" and settings.expose_debug_otp:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="SMS provider is not configured",
+    )
 
 
 @router.post("/send-otp", response_model=ApiResponse)
@@ -56,7 +61,11 @@ async def send_otp(payload: OtpRequest) -> ApiResponse:
     otp = generate_otp()
     expires_at = now + timedelta(seconds=settings.otp_ttl_seconds)
     await save_otp(phone, hash_otp(phone, otp), expires_at.isoformat())
-    await _send_sms(phone, otp)
+    try:
+        await _send_sms(phone, otp)
+    except Exception:
+        await delete_otp(phone)
+        raise
 
     if settings.expose_debug_otp:
         logger.info("otp_debug phone=%s otp=%s", phone, otp)

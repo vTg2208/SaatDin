@@ -27,6 +27,7 @@ from ..core.db import (
 from ..core.zone_cache import load_zone_map, resolve_zone
 from ..models.platform import Platform
 from .external_apis import TRIGGER_THRESHOLDS, get_api_client
+from .coverage import has_active_coverage
 from .fraud_isolation import score_claim
 from .gps_validation import evaluate_worker_gps_signal, gps_features_from_validation
 from .motion_validation import evaluate_worker_motion_signal, motion_features_from_validation
@@ -223,6 +224,9 @@ async def force_trigger_for_zone(
     for worker in workers:
         phone = str(worker["phone"])
         if await has_recent_auto_claim(phone, claim_type, within_minutes=360):
+            continue
+        if not await has_active_coverage(phone):
+            logger.info("auto_claim_skipped_inactive_policy phone=%s claim_type=%s", phone, claim_type)
             continue
 
         platform = _platform_from_display(str(worker["platform_name"]))
@@ -539,6 +543,17 @@ async def _determine_trigger(zone: Dict[str, Any]) -> Dict[str, Any]:
             "dataSource": "newsapi",
         }
 
+    if not settings.allow_static_trigger_fallback:
+        return {
+            "hasActiveAlert": False,
+            "alertType": "none",
+            "claimType": "none",
+            "alertTitle": "No active trigger",
+            "alertDescription": "No live disruption trigger detected.",
+            "confidence": 0.0,
+            "dataSource": "none",
+        }
+
     if flood >= 0.75:
         return {
             "hasActiveAlert": True,
@@ -618,6 +633,9 @@ async def refresh_live_trigger_state() -> None:
 
         for worker in workers:
             phone = str(worker["phone"])
+            if not await has_active_coverage(phone):
+                logger.info("auto_claim_skipped_inactive_policy phone=%s claim_type=%s", phone, claim_type)
+                continue
             zone_affinity = await calculate_zone_affinity_score(phone, zone_lat, zone_lon)
             fraud_ring = get_fraud_ring_members(phone)
             if zone_affinity < 0.25:

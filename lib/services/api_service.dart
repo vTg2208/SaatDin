@@ -58,6 +58,7 @@ class ApiService {
       ...defaults.where((candidate) => candidate != preferred),
     ];
   }
+
   static final ZoneRiskService _zoneRiskService = ZoneRiskService();
   static const Duration _timeout = Duration(seconds: 8);
   static const String _tokenStorageKey = 'saatdin_access_token';
@@ -71,9 +72,7 @@ class ApiService {
   ApiService._internal();
 
   Map<String, String> _headers({bool authorized = false}) {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (authorized && _accessToken != null) {
       headers['Authorization'] = 'Bearer $_accessToken';
     }
@@ -145,7 +144,10 @@ class ApiService {
     await prefs.remove(_tokenStorageKey);
   }
 
-  String _messageFromBody(Map<String, dynamic> body, {required String fallback}) {
+  String _messageFromBody(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
     final message = body['message'];
     final detail = body['detail'];
     if (message is String && message.trim().isNotEmpty) return message;
@@ -185,7 +187,12 @@ class ApiService {
 
         final dynamic decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
-          errors.add(_messageFromBody(decoded, fallback: 'Request failed (${response.statusCode}).'));
+          errors.add(
+            _messageFromBody(
+              decoded,
+              fallback: 'Request failed (${response.statusCode}).',
+            ),
+          );
         } else {
           errors.add('Request failed (${response.statusCode}).');
         }
@@ -233,7 +240,12 @@ class ApiService {
 
         final dynamic decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
-          errors.add(_messageFromBody(decoded, fallback: 'Verification failed (${response.statusCode}).'));
+          errors.add(
+            _messageFromBody(
+              decoded,
+              fallback: 'Verification failed (${response.statusCode}).',
+            ),
+          );
         } else {
           errors.add('Verification failed (${response.statusCode}).');
         }
@@ -311,7 +323,8 @@ class ApiService {
         if (payload is List<dynamic>) {
           final mapped = <DeliveryPlatform>[];
           for (final item in payload) {
-            final raw = (item as Map<String, dynamic>)['name']?.toString() ?? '';
+            final raw =
+                (item as Map<String, dynamic>)['name']?.toString() ?? '';
             final normalized = raw.toLowerCase();
             final defaults = DeliveryPlatform.getPlatforms();
             if (normalized.contains('blinkit')) {
@@ -327,7 +340,9 @@ class ApiService {
         throw Exception('Backend returned no platforms.');
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch platforms.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch platforms.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -346,12 +361,9 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$baseUrl/plans').replace(
-        queryParameters: {
-          'zone': zone,
-          'platform': platform,
-        },
-      );
+      final uri = Uri.parse(
+        '$baseUrl/plans',
+      ).replace(queryParameters: {'zone': zone, 'platform': platform});
       final response = await http
           .get(uri, headers: _headers(authorized: true))
           .timeout(_timeout);
@@ -359,14 +371,18 @@ class ApiService {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final raw = _extractData(body) as List<dynamic>?;
         if (raw == null) {
-          throw Exception('Backend returned no plans for selected zone/platform.');
+          throw Exception(
+            'Backend returned no plans for selected zone/platform.',
+          );
         }
         return raw
             .map((e) => InsurancePlan.fromJson(e as Map<String, dynamic>))
             .toList();
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch plans.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch plans.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -395,7 +411,9 @@ class ApiService {
             .toList();
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch zones.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch zones.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -409,9 +427,9 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$baseUrl/zones').replace(
-        queryParameters: {'platform': platform},
-      );
+      final uri = Uri.parse(
+        '$baseUrl/zones',
+      ).replace(queryParameters: {'platform': platform});
       final response = await http
           .get(uri, headers: _headers(authorized: true))
           .timeout(_timeout);
@@ -419,14 +437,18 @@ class ApiService {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final raw = _extractData(body) as List<dynamic>?;
         if (raw == null) {
-          throw Exception('Backend returned no zones for the selected platform.');
+          throw Exception(
+            'Backend returned no zones for the selected platform.',
+          );
         }
         return raw
             .map((e) => ZoneRisk.fromApiJson(e as Map<String, dynamic>))
             .toList();
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch platform zones.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch platform zones.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -457,7 +479,9 @@ class ApiService {
         if (payload != null) return payload;
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch policy.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch policy.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -485,7 +509,9 @@ class ApiService {
         if (payload != null) return payload;
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to update policy plan.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to update policy plan.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -529,7 +555,9 @@ class ApiService {
         final result = _extractData(body) as Map<String, dynamic>?;
         if (result != null) return result;
       }
-      throw Exception(_messageFromBody(body, fallback: 'Failed to record premium payment.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to record premium payment.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -589,7 +617,11 @@ class ApiService {
     }
   }
 
-  String _readString(Map<String, dynamic> raw, List<String> keys, {String fallback = ''}) {
+  String _readString(
+    Map<String, dynamic> raw,
+    List<String> keys, {
+    String fallback = '',
+  }) {
     for (final key in keys) {
       final value = raw[key];
       if (value == null) continue;
@@ -599,7 +631,11 @@ class ApiService {
     return fallback;
   }
 
-  double _readDouble(Map<String, dynamic> raw, List<String> keys, {double fallback = 0}) {
+  double _readDouble(
+    Map<String, dynamic> raw,
+    List<String> keys, {
+    double fallback = 0,
+  }) {
     for (final key in keys) {
       final value = raw[key];
       if (value == null) continue;
@@ -615,16 +651,24 @@ class ApiService {
 
   Claim _claimFromApi(Map<String, dynamic> raw) {
     final id = _readString(raw, const ['id', 'claimId', 'claim_id']);
-    final normalizedId = id.isEmpty
-        ? ''
-        : (id.startsWith('#') ? id : '#$id');
+    final normalizedId = id.isEmpty ? '' : (id.startsWith('#') ? id : '#$id');
 
     return Claim(
       id: normalizedId,
-      type: _claimTypeFromApi(_readString(raw, const ['claimType', 'claim_type'])),
+      type: _claimTypeFromApi(
+        _readString(raw, const ['claimType', 'claim_type']),
+      ),
       status: _claimStatusFromApi(_readString(raw, const ['status'])),
-      amount: _readDouble(raw, const ['amount', 'payoutAmount', 'payout_amount']),
-      date: DateTime.tryParse(_readString(raw, const ['date', 'createdAt', 'created_at'])) ?? DateTime.now(),
+      amount: _readDouble(raw, const [
+        'amount',
+        'payoutAmount',
+        'payout_amount',
+      ]),
+      date:
+          DateTime.tryParse(
+            _readString(raw, const ['date', 'createdAt', 'created_at']),
+          ) ??
+          DateTime.now(),
       description: _readString(raw, const ['description']),
     );
   }
@@ -651,7 +695,9 @@ class ApiService {
         }
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch claims.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch claims.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -688,7 +734,9 @@ class ApiService {
       }
 
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to submit claim.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to submit claim.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -724,7 +772,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to submit ZoneLock report.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to submit ZoneLock report.'),
+    );
   }
 
   Future<Map<String, dynamic>> escalateClaim({
@@ -750,7 +800,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to escalate claim.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to escalate claim.'),
+    );
   }
 
   Future<Map<String, dynamic>> getPayoutDashboard() async {
@@ -768,7 +820,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to fetch payout dashboard.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to fetch payout dashboard.'),
+    );
   }
 
   Future<Map<String, dynamic>> updatePayoutAccount({
@@ -793,7 +847,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to update payout account.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to update payout account.'),
+    );
   }
 
   Future<Map<String, dynamic>> verifyPayoutAccount(String slot) async {
@@ -811,7 +867,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to verify payout account.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to verify payout account.'),
+    );
   }
 
   Future<Map<String, dynamic>> getPayoutStatement({
@@ -837,7 +895,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to fetch payout statement.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to fetch payout statement.'),
+    );
   }
 
   Future<Map<String, dynamic>> uploadLocationSignal({
@@ -859,12 +919,13 @@ class ApiService {
           uri,
           headers: _headers(authorized: true),
           body: jsonEncode({
-            if (latitude != null) 'latitude': latitude,
-            if (longitude != null) 'longitude': longitude,
-            if (accuracyMeters != null) 'accuracyMeters': accuracyMeters,
-            if (capturedAt != null) 'capturedAt': capturedAt.toUtc().toIso8601String(),
-            if (towerMetadata != null) 'towerMetadata': towerMetadata,
-            if (motionMetadata != null) 'motionMetadata': motionMetadata,
+            'latitude': ?latitude,
+            'longitude': ?longitude,
+            'accuracyMeters': ?accuracyMeters,
+            if (capturedAt != null)
+              'capturedAt': capturedAt.toUtc().toIso8601String(),
+            'towerMetadata': ?towerMetadata,
+            'motionMetadata': ?motionMetadata,
           }),
         )
         .timeout(_timeout);
@@ -873,7 +934,9 @@ class ApiService {
       final payload = _extractData(body) as Map<String, dynamic>?;
       if (payload != null) return payload;
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to upload location signal.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to upload location signal.'),
+    );
   }
 
   // ── Profile ───────────────────────────────────────
@@ -898,7 +961,9 @@ class ApiService {
         }
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch profile.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch profile.'),
+      );
     } catch (_) {
       rethrow;
     }
@@ -954,11 +1019,7 @@ class ApiService {
 
     final uri = Uri.parse('$baseUrl/workers/me');
     final response = await http
-        .put(
-          uri,
-          headers: _headers(authorized: true),
-          body: jsonEncode(data),
-        )
+        .put(uri, headers: _headers(authorized: true), body: jsonEncode(data))
         .timeout(_timeout);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode == 200) {
@@ -967,7 +1028,9 @@ class ApiService {
         return User.fromJson(payload);
       }
     }
-    throw Exception(_messageFromBody(body, fallback: 'Failed to update profile.'));
+    throw Exception(
+      _messageFromBody(body, fallback: 'Failed to update profile.'),
+    );
   }
 
   // ── Triggers / Risk ───────────────────────────────
@@ -980,9 +1043,9 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$baseUrl/triggers/active').replace(
-        queryParameters: {'zone': zone},
-      );
+      final uri = Uri.parse(
+        '$baseUrl/triggers/active',
+      ).replace(queryParameters: {'zone': zone});
       final response = await http
           .get(uri, headers: _headers(authorized: true))
           .timeout(_timeout);
@@ -992,7 +1055,9 @@ class ApiService {
         if (payload != null) return payload;
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(_messageFromBody(body, fallback: 'Failed to fetch active triggers.'));
+      throw Exception(
+        _messageFromBody(body, fallback: 'Failed to fetch active triggers.'),
+      );
     } catch (_) {
       rethrow;
     }

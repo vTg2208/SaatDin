@@ -75,24 +75,40 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       dashboard = <String, dynamic>{};
     }
 
-    final transfers = (dashboard['transfers'] as List<dynamic>? ?? const <dynamic>[])
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final transfers =
+        (dashboard['transfers'] as List<dynamic>? ?? const <dynamic>[])
+            .whereType<Map<String, dynamic>>()
+            .toList();
 
-    final payouts = transfers
-        .map(
-          (item) => _PayoutEntry(
-            date: DateTime.tryParse(_coerceString(item['createdAt'])) ?? DateTime.now(),
-            triggerType: _coerceString(item['note'], fallback: 'Claim payout'),
-            triggerRawType: _coerceString(item['provider'], fallback: 'payout'),
-            status: _coerceString(item['status'], fallback: 'pending'),
-            amount: (item['amount'] as num?)?.round() ?? 0,
-            upiRef: _coerceString(item['providerPayoutId'], fallback: _coerceString(item['id'])),
-            upiId: _coerceString(item['upiId'], fallback: _coerceString(dashboard['primaryUpi'])),
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final payouts =
+        transfers
+            .map(
+              (item) => _PayoutEntry(
+                date:
+                    DateTime.tryParse(_coerceString(item['createdAt'])) ??
+                    DateTime.now(),
+                triggerType: _coerceString(
+                  item['note'],
+                  fallback: 'Claim payout',
+                ),
+                triggerRawType: _coerceString(
+                  item['provider'],
+                  fallback: 'payout',
+                ),
+                status: _coerceString(item['status'], fallback: 'pending'),
+                amount: (item['amount'] as num?)?.round() ?? 0,
+                upiRef: _coerceString(
+                  item['providerPayoutId'],
+                  fallback: _coerceString(item['id']),
+                ),
+                upiId: _coerceString(
+                  item['upiId'],
+                  fallback: _coerceString(dashboard['primaryUpi']),
+                ),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
 
     if (!mounted) return;
     setState(() {
@@ -105,7 +121,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
     if (loadIssues.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Some payout details could not be refreshed.')),
+        const SnackBar(
+          content: Text('Some payout details could not be refreshed.'),
+        ),
       );
     }
   }
@@ -144,7 +162,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     }
 
     final settledPayouts = _settledPayoutsForRange(_selectedRange);
-    final latestSettledPayout = settledPayouts.isNotEmpty ? settledPayouts.first : null;
+    final latestSettledPayout = settledPayouts.isNotEmpty
+        ? settledPayouts.first
+        : null;
     final weeklyTotal = _totalReceivedForRange(_selectedRange);
     final recentCreditedUpi = _recentCreditedUpi(latestSettledPayout);
 
@@ -158,9 +178,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
             right: 0,
             child: SizedBox(
               height: 200,
-              child: CustomPaint(
-                painter: _PayoutsTopBackgroundPainter(),
-              ),
+              child: CustomPaint(painter: _PayoutsTopBackgroundPainter()),
             ),
           ),
           SafeArea(
@@ -198,12 +216,13 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                     recentCreditedUpi: recentCreditedUpi,
                   ),
                   const SizedBox(height: 16),
-                  _buildReceiptTimeline(
-                    settledPayouts,
-                    range: _selectedRange,
-                  ),
+                  _buildReceiptTimeline(settledPayouts, range: _selectedRange),
                   const SizedBox(height: 14),
-                  const Divider(height: 1, thickness: 1, color: Color(0xFFE6E0D7)),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFE6E0D7),
+                  ),
                   const SizedBox(height: 18),
                   _buildReceiptActions(),
                   const SizedBox(height: 18),
@@ -340,7 +359,6 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     required int weeklyTotal,
     required String recentCreditedUpi,
   }) {
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -392,7 +410,8 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     final steps = settledPayouts
         .map(
           (entry) => _ReceiptStep(
-            title: '(₹${_currencyFormat.format(entry.amount)}) received (${_claimLabel(entry)})',
+            title:
+                '(₹${_currencyFormat.format(entry.amount)}) received (${_claimLabel(entry)})',
             subtitle: '${_formatTimeLabel(entry.date)} · Settled to wallet',
           ),
         )
@@ -410,18 +429,12 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     return Column(
       children: [
         for (var index = 0; index < steps.length; index++)
-          _timelineStep(
-            step: steps[index],
-            isLast: index == steps.length - 1,
-          ),
+          _timelineStep(step: steps[index], isLast: index == steps.length - 1),
       ],
     );
   }
 
-  Widget _timelineStep({
-    required _ReceiptStep step,
-    required bool isLast,
-  }) {
+  Widget _timelineStep({required _ReceiptStep step, required bool isLast}) {
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
       child: Row(
@@ -661,7 +674,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                               draftUpi = next;
                               controller.value = TextEditingValue(
                                 text: next,
-                                selection: TextSelection.collapsed(offset: next.length),
+                                selection: TextSelection.collapsed(
+                                  offset: next.length,
+                                ),
                               );
                             });
                           },
@@ -682,7 +697,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                         }
 
                         try {
-                          await _apiService.updatePayoutAccount(slot: slot, upiId: value);
+                          await _apiService.updatePayoutAccount(
+                            slot: slot,
+                            upiId: value,
+                          );
                           if (!sheetContext.mounted) return;
                           Navigator.pop(sheetContext);
                           await _refreshPayouts();
@@ -735,7 +753,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   }
 
   void _showSimpleInfo(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _switchToTab(int index) {
@@ -753,11 +773,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       context: context,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
-      initialDateRange: _customDateRange ??
-          DateTimeRange(
-            start: DateTime(now.year, now.month, 1),
-            end: now,
-          ),
+      initialDateRange:
+          _customDateRange ??
+          DateTimeRange(start: DateTime(now.year, now.month, 1), end: now),
     );
 
     if (picked == null || !mounted) return;
@@ -773,15 +791,15 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     return '${_formatDayMonth(range.start)} - ${_formatDayMonth(range.end)}';
   }
 
-    int _totalReceivedForRange(int range) {
+  int _totalReceivedForRange(int range) {
     return _payouts
-      .where((entry) => _isInRange(entry.date, range) && _isSettled(entry))
+        .where((entry) => _isInRange(entry.date, range) && _isSettled(entry))
         .fold<int>(0, (sum, entry) => sum + entry.amount);
   }
 
-    List<_PayoutEntry> _settledPayoutsForRange(int range) {
+  List<_PayoutEntry> _settledPayoutsForRange(int range) {
     final settled = _payouts
-      .where((entry) => _isSettled(entry) && _isInRange(entry.date, range))
+        .where((entry) => _isSettled(entry) && _isInRange(entry.date, range))
         .toList();
     settled.sort((a, b) => b.date.compareTo(a.date));
     return settled;
@@ -803,14 +821,25 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       final selected = _customDateRange;
       if (selected == null) return false;
       final day = DateTime(value.year, value.month, value.day);
-      final start = DateTime(selected.start.year, selected.start.month, selected.start.day);
-      final end = DateTime(selected.end.year, selected.end.month, selected.end.day);
+      final start = DateTime(
+        selected.start.year,
+        selected.start.month,
+        selected.start.day,
+      );
+      final end = DateTime(
+        selected.end.year,
+        selected.end.month,
+        selected.end.day,
+      );
       return !day.isBefore(start) && !day.isAfter(end);
     }
 
     final now = DateTime.now();
-    final thisWeekStart = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
+    final thisWeekStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
     final targetStart = thisWeekStart.subtract(Duration(days: 7 * range));
     final targetEnd = targetStart.add(const Duration(days: 7));
     final day = DateTime(value.year, value.month, value.day);
@@ -906,11 +935,7 @@ class _PayoutsTopBackgroundPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          AppColors.accentLight,
-          Color(0xFFD7F3EF),
-          Color(0xFFF4FBF9),
-        ],
+        colors: [AppColors.accentLight, Color(0xFFD7F3EF), Color(0xFFF4FBF9)],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
     final basePath = Path()
@@ -941,9 +966,21 @@ class _PayoutsTopBackgroundPainter extends CustomPainter {
     );
 
     final dotPaint = Paint()..color = AppColors.accent.withValues(alpha: 0.18);
-    canvas.drawCircle(Offset(size.width * 0.15, size.height * 0.12), 12, dotPaint);
-    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.2), 20, dotPaint);
-    canvas.drawCircle(Offset(size.width * 0.58, size.height * 0.72), 10, dotPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.15, size.height * 0.12),
+      12,
+      dotPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.82, size.height * 0.2),
+      20,
+      dotPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.58, size.height * 0.72),
+      10,
+      dotPaint,
+    );
   }
 
   @override
