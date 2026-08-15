@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, List
+from urllib.parse import urlparse
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -97,6 +98,13 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     allow_client_reported_premium_payments: bool = True
 
+    # Authoritative Spring billing service
+    billing_service_enabled: bool = False
+    billing_service_url: str = "http://localhost:8082"
+    billing_service_api_key: str = ""
+    billing_request_timeout_seconds: float = 2.0
+    billing_allow_private_http: bool = False
+
     # Adversarial defense — claim velocity spike detection
     claim_velocity_spike_threshold: int = 15
     claim_velocity_spike_window_minutes: int = 10
@@ -165,6 +173,7 @@ class Settings(BaseSettings):
         "motion_max_speed_mps",
         "motion_validation_score_weight",
         "motion_validation_adjustment_cap",
+        "billing_request_timeout_seconds",
         mode="before",
     )
     @classmethod
@@ -272,6 +281,23 @@ def validate_runtime_settings(runtime_settings: Any = settings) -> None:
         errors.append("ALLOW_CLIENT_REPORTED_PREMIUM_PAYMENTS must be false")
     if bool(getattr(runtime_settings, "allow_static_trigger_fallback", True)):
         errors.append("ALLOW_STATIC_TRIGGER_FALLBACK must be false")
+
+    billing_enabled = bool(getattr(runtime_settings, "billing_service_enabled", False))
+    if not billing_enabled:
+        errors.append("BILLING_SERVICE_ENABLED must be true")
+    else:
+        billing_key = str(getattr(runtime_settings, "billing_service_api_key", ""))
+        if len(billing_key) < 32:
+            errors.append("BILLING_SERVICE_API_KEY must contain at least 32 characters")
+        billing_url = str(getattr(runtime_settings, "billing_service_url", ""))
+        parsed_billing_url = urlparse(billing_url)
+        allow_private_http = bool(getattr(runtime_settings, "billing_allow_private_http", False))
+        hostname = (parsed_billing_url.hostname or "").lower()
+        private_hostname = bool(hostname) and ("." not in hostname or hostname.endswith(".internal"))
+        if parsed_billing_url.scheme != "https" and not (allow_private_http and private_hostname):
+            errors.append(
+                "BILLING_SERVICE_URL must use HTTPS unless private HTTP is explicitly allowed"
+            )
     if any("localhost" in origin or "127.0.0.1" in origin for origin in cors_origins):
         errors.append("CORS_ORIGINS must not contain local development origins")
     if "localhost" in cors_regex or "127\\.0\\.0\\.1" in cors_regex:

@@ -16,6 +16,7 @@ from .services.co_claim_monitor import co_claim_cluster_monitor
 from .services.ml_premium import initialize_premium_model
 from .services.external_apis import initialize_api_client, close_api_client
 from .services.fraud_isolation import initialize_fraud_model
+from .services.billing_client import close_billing_client, initialize_billing_client
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI):
     logger.info("app_starting")
     validate_runtime_settings(settings)
+    await initialize_billing_client(settings)
     await init_db()
     await refresh_zone_cache()
     
@@ -44,6 +46,7 @@ async def lifespan(_: FastAPI):
     await co_claim_cluster_monitor.stop()
     await trigger_monitor.stop()
     await close_api_client()
+    await close_billing_client()
     await close_db()
     logger.info("app_stopped")
 
