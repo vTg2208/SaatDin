@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import date
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -211,6 +213,25 @@ class PremiumPaymentRecordRequest(BaseModel):
     weekStartDate: Optional[str] = None
     providerRef: Optional[str] = Field(default=None, max_length=128)
     metadata: Optional[Dict[str, Any]] = None
+
+
+class PaymentOrderCreateRequest(BaseModel):
+    clientRequestId: str = Field(
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+
+
+class PaymentOrderOut(BaseModel):
+    orderId: str
+    status: str
+    provider: str
+    amount: Decimal
+    currency: str
+    coverageWeekStart: date
+    expiresAt: datetime
+    checkoutData: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ClaimSubmitRequest(BaseModel):

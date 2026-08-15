@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..core.config import settings
 from ..core.db import (
@@ -16,11 +17,43 @@ from ..core.db import (
 from ..core.dependencies import get_current_worker
 from ..core.zone_cache import resolve_zone
 from ..models.platform import Platform
-from ..models.schemas import ApiResponse, PolicyOut, PolicyUpdateRequest, PremiumPaymentRecordRequest
+from ..models.schemas import (
+    ApiResponse,
+    PaymentOrderCreateRequest,
+    PaymentOrderOut,
+    PolicyOut,
+    PolicyUpdateRequest,
+    PremiumPaymentRecordRequest,
+)
+from ..services.billing_client import (
+    BillingServiceError,
+    PaymentOrderCreate,
+    PaymentOrderView,
+    get_billing_client,
+)
 from ..services.premium import build_plans
 
 router = APIRouter(tags=["policy"])
 logger = logging.getLogger(__name__)
+
+
+def _payment_order_out(order: PaymentOrderView) -> PaymentOrderOut:
+    return PaymentOrderOut(
+        orderId=str(order.order_id),
+        status=order.status,
+        provider=order.provider,
+        amount=order.amount,
+        currency=order.currency,
+        coverageWeekStart=order.coverage_week_start,
+        expiresAt=order.expires_at,
+        checkoutData=order.checkout_data,
+    )
+
+
+def _billing_http_error(exc: BillingServiceError) -> HTTPException:
+    if exc.status_code in {400, 404, 409}:
+        return HTTPException(status_code=exc.status_code, detail=str(exc))
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Billing service unavailable")
 
 
 def _next_week_start_utc(now: datetime) -> datetime:
@@ -297,13 +330,18 @@ async def record_premium_payment(
     payload: PremiumPaymentRecordRequest,
     worker: dict = Depends(get_current_worker),
 ) -> ApiResponse:
+    if settings.billing_service_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Client-reported premium payments have been retired.",
+        )
     if not settings.allow_client_reported_premium_payments:
         raise HTTPException(
             status_code=403,
             detail="Premium payments must be server-verified before coverage is scheduled.",
         )
-    status = payload.status.strip().lower()
-    if status not in {"paid", "missed", "failed"}:
+    payment_status = payload.status.strip().lower()
+    if payment_status not in {"paid", "missed", "failed"}:
         raise HTTPException(status_code=400, detail="Invalid status. Use paid, missed, or failed")
 
     amount = float(payload.amount)
@@ -315,14 +353,14 @@ async def record_premium_payment(
         phone=str(worker["phone"]),
         week_start_date=week_start,
         amount=amount,
-        status=status,
+        status=payment_status,
         provider_ref=payload.providerRef,
         metadata=payload.metadata,
     )
 
     # A successful payment always schedules coverage for the upcoming paid cycle,
     # never for the already-running week.
-    if status == "paid":
+    if payment_status == "paid":
         effective_at = datetime(
             week_start.year,
             week_start.month,
@@ -352,8 +390,90 @@ async def record_premium_payment(
     logger.info(
         "premium_payment_recorded phone=%s status=%s week_start=%s amount=%s",
         worker["phone"],
-        status,
+        payment_status,
         week_start.isoformat(),
         amount,
     )
     return ApiResponse(success=True, data=policy, message="Premium payment recorded")
+
+
+@router.post("/payment-orders", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
+async def create_payment_order(
+    payload: PaymentOrderCreateRequest,
+    request: Request,
+    worker: dict = Depends(get_current_worker),
+) -> ApiResponse:
+    if not settings.billing_service_enabled:
+        raise HTTPException(status_code=503, detail="Billing service is disabled")
+
+    platform = Platform.from_input(str(worker["platform_name"]))
+    _, zone_data = resolve_zone(str(worker["zone_pincode"]))
+    plans = build_plans(
+        float(zone_data.get("zone_risk_multiplier", 1.0)), platform, zone_data=zone_data
+    )
+    selected = next(
+        (plan for plan in plans if plan.name.lower() == str(worker["plan_name"]).strip().lower()),
+        None,
+    )
+    if selected is None:
+        raise HTTPException(status_code=400, detail="Worker has an unknown plan")
+
+    payment_rows = await list_paid_premium_weeks_for_phone(str(worker["phone"]))
+    discount = _loyalty_discount_percent(_clean_streak_weeks_from_paid_rows(payment_rows))
+    premium = _apply_loyalty_discount(selected.weeklyPremium, discount)
+    week_start = _next_week_start_utc(datetime.now(timezone.utc)).date()
+    command = PaymentOrderCreate(
+        worker_phone=str(worker["phone"]),
+        plan_code=selected.name.strip().lower(),
+        amount=Decimal(premium).quantize(Decimal("0.01")),
+        currency="INR",
+        coverage_week_start=week_start,
+        idempotency_key=payload.clientRequestId,
+        correlation_id=request.headers.get("X-Correlation-Id"),
+    )
+    try:
+        order = await get_billing_client().create_payment_order(command)
+    except BillingServiceError as exc:
+        raise _billing_http_error(exc) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Billing service returned an invalid response") from exc
+    return ApiResponse(success=True, data=_payment_order_out(order))
+
+
+@router.get("/payment-orders/{order_id}", response_model=ApiResponse)
+async def get_payment_order(
+    order_id: str,
+    worker: dict = Depends(get_current_worker),
+) -> ApiResponse:
+    if not settings.billing_service_enabled:
+        raise HTTPException(status_code=503, detail="Billing service is disabled")
+    try:
+        order = await get_billing_client().get_payment_order(order_id, str(worker["phone"]))
+    except BillingServiceError as exc:
+        raise _billing_http_error(exc) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Billing service returned an invalid response") from exc
+    return ApiResponse(success=True, data=_payment_order_out(order))
+
+
+@router.post("/payment-orders/{order_id}/sandbox-complete", response_model=ApiResponse)
+async def complete_sandbox_payment_order(
+    order_id: str,
+    worker: dict = Depends(get_current_worker),
+) -> ApiResponse:
+    environment = settings.app_environment.strip().lower()
+    if environment in {"production", "prod"}:
+        raise HTTPException(status_code=403, detail="Sandbox completion is unavailable in production")
+    if not settings.billing_service_enabled:
+        raise HTTPException(status_code=503, detail="Billing service is disabled")
+    client = get_billing_client()
+    try:
+        current = await client.get_payment_order(order_id, str(worker["phone"]))
+        if current.provider != "sandbox":
+            raise HTTPException(status_code=409, detail="Payment order does not use the sandbox provider")
+        order = await client.complete_sandbox_order(order_id, str(worker["phone"]))
+    except BillingServiceError as exc:
+        raise _billing_http_error(exc) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Billing service returned an invalid response") from exc
+    return ApiResponse(success=True, data=_payment_order_out(order))

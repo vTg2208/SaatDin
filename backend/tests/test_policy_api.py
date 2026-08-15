@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
+from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.api.policy import router as policy_router
 from backend.app.core.security import create_access_token
+from backend.app.services.billing_client import PaymentOrderView
 
 
 def _build_client() -> TestClient:
@@ -100,6 +103,65 @@ class PolicyPlanUpdateTests(unittest.TestCase):
 
 
 class PremiumPaymentTests(unittest.TestCase):
+    def test_create_payment_order_uses_server_owned_price_phone_and_week(self) -> None:
+        client = _build_client()
+        token = create_access_token("9876543210")
+        billing = AsyncMock()
+        billing.create_payment_order.return_value = PaymentOrderView(
+            order_id=UUID("63c40536-b23a-4d52-8360-1a08454dcd10"),
+            status="PENDING",
+            provider="sandbox",
+            amount=Decimal("60.00"),
+            currency="INR",
+            coverage_week_start=date(2026, 8, 17),
+            expires_at=datetime(2026, 8, 15, 8, 15, tzinfo=timezone.utc),
+            checkout_data={"providerOrderId": "sandbox-order-1"},
+        )
+        plans = [
+            type("Plan", (), {"name": "Basic", "weeklyPremium": 35, "perTriggerPayout": 250, "maxDaysPerWeek": 2}),
+            type("Plan", (), {"name": "Standard", "weeklyPremium": 60, "perTriggerPayout": 400, "maxDaysPerWeek": 3}),
+            type("Plan", (), {"name": "Premium", "weeklyPremium": 88, "perTriggerPayout": 550, "maxDaysPerWeek": 4}),
+        ]
+
+        with (
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
+            patch.dict("backend.app.core.config.settings.__dict__", {"billing_service_enabled": True}),
+            patch("backend.app.api.policy.get_billing_client", return_value=billing),
+            patch("backend.app.api.policy.resolve_zone", return_value=("560103", {"zone_risk_multiplier": 1.0})),
+            patch("backend.app.api.policy.build_plans", return_value=plans),
+            patch("backend.app.api.policy.list_paid_premium_weeks_for_phone", new=AsyncMock(return_value=[])),
+        ):
+            response = client.post(
+                "/api/v1/policy/payment-orders",
+                headers={"Authorization": f"Bearer {token}", "X-Correlation-Id": "corr-1"},
+                json={"clientRequestId": "checkout-123"},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        request = billing.create_payment_order.await_args.args[0]
+        self.assertEqual(request.worker_phone, "9876543210")
+        self.assertEqual(request.plan_code, "standard")
+        self.assertEqual(request.amount, Decimal("60.00"))
+        self.assertEqual(request.idempotency_key, "checkout-123")
+        self.assertEqual(request.coverage_week_start.weekday(), 0)
+
+    def test_legacy_payment_route_is_gone_when_billing_is_enabled(self) -> None:
+        client = _build_client()
+        token = create_access_token("9876543210")
+        with (
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
+            patch.dict("backend.app.core.config.settings.__dict__", {"billing_service_enabled": True}),
+        ):
+            response = client.post(
+                "/api/v1/policy/premium-payment",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"amount": 60, "status": "paid"},
+            )
+
+        self.assertEqual(response.status_code, 410)
+
     def test_record_payment_rejects_client_report_when_disabled(self) -> None:
         client = _build_client()
         token = create_access_token("9876543210")

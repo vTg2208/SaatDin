@@ -44,7 +44,9 @@ class PaymentOrderView:
 
 
 class BillingServiceError(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class BillingClient:
@@ -121,7 +123,9 @@ def _parse_order_response(response: httpx.Response) -> PaymentOrderView:
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        raise BillingServiceError(f"billing service returned HTTP {response.status_code}") from exc
+        raise BillingServiceError(
+            f"billing service returned HTTP {response.status_code}", response.status_code
+        ) from exc
     payload = response.json()
     if not isinstance(payload, dict):
         raise ValueError("billing order response must be an object")
