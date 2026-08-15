@@ -9,6 +9,7 @@ import '../models/claim_model.dart';
 import '../models/plan_model.dart';
 import '../models/platform_model.dart';
 import '../models/zone_risk_model.dart';
+import '../models/payment_order_model.dart';
 import 'zone_risk_service.dart';
 
 class WorkerStatus {
@@ -19,7 +20,23 @@ class WorkerStatus {
   final User? worker;
 }
 
-class ApiService {
+abstract class PaymentOrderApi {
+  Future<User?> registerUser({
+    required String phone,
+    required String platformName,
+    required String zone,
+    required String planName,
+    String? name,
+  });
+
+  Future<PaymentOrder> createPaymentOrder({required String clientRequestId});
+
+  Future<PaymentOrder> getPaymentOrder(String orderId);
+
+  Future<PaymentOrder> completeSandboxPaymentOrder(String orderId);
+}
+
+class ApiService implements PaymentOrderApi {
   static String get baseUrl => _candidateBaseUrls.first;
   static String? _preferredBaseUrl;
   static const String _baseUrlStorageKey = 'saatdin_api_base_url';
@@ -263,6 +280,7 @@ class ApiService {
   // ── Registration ──────────────────────────────────
 
   /// POST /register
+  @override
   Future<User?> registerUser({
     required String phone,
     required String platformName,
@@ -517,50 +535,77 @@ class ApiService {
     }
   }
 
-  /// POST /policy/premium-payment
-  Future<Map<String, dynamic>> recordPremiumPayment({
-    required double amount,
-    String status = 'paid',
-    String? weekStartDate,
-    String? providerRef,
-    Map<String, dynamic>? metadata,
+  /// POST /policy/payment-orders
+  @override
+  Future<PaymentOrder> createPaymentOrder({
+    required String clientRequestId,
   }) async {
     await _ensureSessionInitialized();
     if (_accessToken == null) {
       throw Exception('Authentication required. Please verify OTP first.');
     }
 
-    try {
-      final uri = Uri.parse('$baseUrl/policy/premium-payment');
-      final payload = <String, dynamic>{
-        'amount': amount,
-        'status': status,
-        if (weekStartDate != null && weekStartDate.trim().isNotEmpty)
-          'weekStartDate': weekStartDate.trim(),
-        if (providerRef != null && providerRef.trim().isNotEmpty)
-          'providerRef': providerRef.trim(),
-        if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
-      };
+    final uri = Uri.parse('$baseUrl/policy/payment-orders');
+    final response = await http
+        .post(
+          uri,
+          headers: _headers(authorized: true),
+          body: jsonEncode({'clientRequestId': clientRequestId}),
+        )
+        .timeout(_timeout);
+    return _paymentOrderFromResponse(response, expectedStatusCodes: {201});
+  }
 
-      final response = await http
-          .post(
-            uri,
-            headers: _headers(authorized: true),
-            body: jsonEncode(payload),
-          )
-          .timeout(_timeout);
-
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final result = _extractData(body) as Map<String, dynamic>?;
-        if (result != null) return result;
-      }
-      throw Exception(
-        _messageFromBody(body, fallback: 'Failed to record premium payment.'),
-      );
-    } catch (_) {
-      rethrow;
+  /// GET /policy/payment-orders/{orderId}
+  @override
+  Future<PaymentOrder> getPaymentOrder(String orderId) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
     }
+
+    final uri = Uri.parse('$baseUrl/policy/payment-orders/$orderId');
+    final response = await http
+        .get(uri, headers: _headers(authorized: true))
+        .timeout(_timeout);
+    return _paymentOrderFromResponse(response, expectedStatusCodes: {200});
+  }
+
+  /// POST /policy/payment-orders/{orderId}/sandbox-complete
+  @override
+  Future<PaymentOrder> completeSandboxPaymentOrder(String orderId) async {
+    await _ensureSessionInitialized();
+    if (_accessToken == null) {
+      throw Exception('Authentication required. Please verify OTP first.');
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/policy/payment-orders/$orderId/sandbox-complete',
+    );
+    final response = await http
+        .post(uri, headers: _headers(authorized: true))
+        .timeout(_timeout);
+    return _paymentOrderFromResponse(response, expectedStatusCodes: {200});
+  }
+
+  PaymentOrder _paymentOrderFromResponse(
+    http.Response response, {
+    required Set<int> expectedStatusCodes,
+  }) {
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid payment order response.');
+    }
+    if (!expectedStatusCodes.contains(response.statusCode)) {
+      throw Exception(
+        _messageFromBody(decoded, fallback: 'Payment order request failed.'),
+      );
+    }
+    final payload = _extractData(decoded);
+    if (payload is! Map<String, dynamic>) {
+      throw const FormatException('Payment order response is missing data.');
+    }
+    return PaymentOrder.fromJson(payload);
   }
 
   // ── Claims ────────────────────────────────────────

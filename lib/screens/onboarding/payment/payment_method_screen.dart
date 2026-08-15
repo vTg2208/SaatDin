@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../../models/payment_order_model.dart';
 import '../../../models/user_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../services/api_service.dart';
@@ -11,14 +12,16 @@ import '../../../widgets/progress_dots.dart';
 import 'payment_flow_arguments.dart';
 
 class PaymentMethodScreen extends StatefulWidget {
-  const PaymentMethodScreen({super.key});
+  const PaymentMethodScreen({super.key, this.paymentApi});
+
+  final PaymentOrderApi? paymentApi;
 
   @override
   State<PaymentMethodScreen> createState() => _PaymentMethodScreenState();
 }
 
 class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
-  final ApiService _apiService = ApiService();
+  late final PaymentOrderApi _apiService;
   final TextEditingController _upiIdController = TextEditingController();
   static const List<String> _commonUpiHandles = <String>[
     '@ybl',
@@ -35,6 +38,17 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
   _PaymentOption _selectedOption = _PaymentOption.upi;
   _UpiApp _selectedUpiApp = _UpiApp.paytm;
   bool _isProcessing = false;
+  PaymentOrder? _paymentOrder;
+  late final String _clientRequestId;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = widget.paymentApi ?? ApiService();
+    _clientRequestId =
+        'checkout-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-'
+        '${Random.secure().nextInt(1 << 32).toRadixString(36)}';
+  }
 
   PaymentFlowArguments? _arguments(BuildContext context) {
     return ModalRoute.of(context)?.settings.arguments as PaymentFlowArguments?;
@@ -69,27 +83,6 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       _isProcessing = true;
     });
 
-    final discountedAmount =
-        (args.plan.weeklyPremium * (1 - args.loyaltyDiscountPercent / 100));
-
-    if (_selectedOption == _PaymentOption.upi) {
-      final launched = await _launchSelectedUpiApp(args, discountedAmount);
-      if (!launched) {
-        if (!mounted) return;
-        setState(() {
-          _isProcessing = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not open ${_selectedUpiApp.label}. Please check if the app is installed.',
-            ),
-          ),
-        );
-        return;
-      }
-    }
-
     final User? user = await _apiService.registerUser(
       phone: args.phone,
       platformName: args.platform,
@@ -100,11 +93,10 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
 
     if (!mounted) return;
 
-    setState(() {
-      _isProcessing = false;
-    });
-
     if (user == null) {
+      setState(() {
+        _isProcessing = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Payment could not be completed. Please try again.'),
@@ -114,83 +106,65 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
     }
 
     try {
-      await _apiService.recordPremiumPayment(
-        amount: discountedAmount,
-        status: 'paid',
-        providerRef: 'demo-${DateTime.now().millisecondsSinceEpoch}',
-        metadata: {
-          'source': 'onboarding-payment-flow',
-          'paymentMethod': _selectedOption.title,
-          if (_selectedOption == _PaymentOption.upi)
-            'upiApp': _selectedUpiApp.label,
-          'plan': args.plan.name,
-        },
-      );
+      final existingOrder = _paymentOrder;
+      PaymentOrder order;
+      if (existingOrder != null) {
+        order = existingOrder;
+      } else {
+        order = await _apiService.createPaymentOrder(
+          clientRequestId: _clientRequestId,
+        );
+      }
+      _paymentOrder = order;
+
+      if (order.provider == 'sandbox' && order.isPending) {
+        order = await _apiService.completeSandboxPaymentOrder(order.id);
+        _paymentOrder = order;
+      }
+
+      for (var attempt = 0; attempt < 3 && order.isPending; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        order = await _apiService.getPaymentOrder(order.id);
+        _paymentOrder = order;
+      }
+
+      if (!mounted) return;
+      if (order.isPaid) {
+        setState(() {
+          _isProcessing = false;
+        });
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.paymentSuccess,
+          arguments: args.copyWith(
+            paymentMethod: _selectedOption.title,
+            paymentOrder: order,
+          ),
+        );
+        return;
+      }
+
+      final message = order.isPending
+          ? 'Payment is still pending. Retry to check the same order.'
+          : 'Payment was not completed. Please retry.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Payment was captured, but policy sync failed. Please retry once.',
+            'Could not confirm payment. Retry to check the same order.',
           ),
         ),
       );
-      return;
-    }
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.paymentSuccess,
-      arguments: args.copyWith(paymentMethod: _selectedOption.title),
-    );
-  }
-
-  Future<bool> _launchSelectedUpiApp(
-    PaymentFlowArguments args,
-    double amount,
-  ) async {
-    if (kIsWeb) {
-      return false;
-    }
-
-    final params = <String, String>{
-      'pa': 'saatdin@okaxis',
-      'pn': 'SaatDin',
-      'tn': 'Weekly premium - ${args.plan.name}',
-      'am': amount.toStringAsFixed(2),
-      'cu': 'INR',
-      'tr': 'SD-${DateTime.now().millisecondsSinceEpoch}',
-    };
-
-    final appUri = _buildAppSpecificUpiUri(params);
-    final launchedApp = await launchUrl(
-      appUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (launchedApp) {
-      return true;
-    }
-
-    final genericUri = Uri(scheme: 'upi', host: 'pay', queryParameters: params);
-    return launchUrl(genericUri, mode: LaunchMode.externalApplication);
-  }
-
-  Uri _buildAppSpecificUpiUri(Map<String, String> params) {
-    switch (_selectedUpiApp) {
-      case _UpiApp.paytm:
-        return Uri(scheme: 'paytmmp', host: 'pay', queryParameters: params);
-      case _UpiApp.phonepe:
-        return Uri(scheme: 'phonepe', host: 'pay', queryParameters: params);
-      case _UpiApp.googlePay:
-        return Uri(
-          scheme: 'tez',
-          host: 'upi',
-          path: '/pay',
-          queryParameters: params,
-        );
-      case _UpiApp.custom:
-        return Uri(scheme: 'upi', host: 'pay', queryParameters: params);
+    } finally {
+      if (mounted && _isProcessing) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 

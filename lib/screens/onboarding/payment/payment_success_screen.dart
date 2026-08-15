@@ -15,12 +15,12 @@ class PaymentSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final args = _arguments(context);
-    if (args == null) {
+    if (args == null || args.paymentOrder?.isPaid != true) {
       return const Scaffold(
         backgroundColor: AppColors.background,
         body: Center(
           child: Text(
-            'Payment details are missing.',
+            'Verified payment details are missing.',
             style: TextStyle(color: AppColors.textSecondary),
           ),
         ),

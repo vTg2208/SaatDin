@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:saatdin/models/claim_model.dart';
 import 'package:saatdin/models/plan_model.dart';
+import 'package:saatdin/models/payment_order_model.dart';
 
 void main() {
   group('Claim model', () {
@@ -110,6 +111,43 @@ void main() {
       final roundTripped = InsurancePlan.fromJson(json);
       expect(roundTripped.name, plan.name);
       expect(roundTripped.weeklyPremium, plan.weeklyPremium);
+    });
+  });
+
+  group('PaymentOrder model', () {
+    test('parses verified payment order response', () {
+      final order = PaymentOrder.fromJson(const {
+        'orderId': '63c40536-b23a-4d52-8360-1a08454dcd10',
+        'status': 'PENDING',
+        'provider': 'sandbox',
+        'amount': '75.00',
+        'currency': 'INR',
+        'coverageWeekStart': '2026-08-17',
+        'expiresAt': '2026-08-15T08:15:00Z',
+        'checkoutData': {'providerOrderId': 'sandbox-order-1'},
+      });
+
+      expect(order.id, '63c40536-b23a-4d52-8360-1a08454dcd10');
+      expect(order.amount, 75.0);
+      expect(order.isPending, isTrue);
+      expect(order.isPaid, isFalse);
+      expect(order.coverageWeekStart, DateTime.utc(2026, 8, 17));
+    });
+
+    test('rejects unknown status', () {
+      expect(
+        () => PaymentOrder.fromJson(const {
+          'orderId': '63c40536-b23a-4d52-8360-1a08454dcd10',
+          'status': 'SETTLED',
+          'provider': 'sandbox',
+          'amount': 75,
+          'currency': 'INR',
+          'coverageWeekStart': '2026-08-17',
+          'expiresAt': '2026-08-15T08:15:00Z',
+          'checkoutData': <String, dynamic>{},
+        }),
+        throwsFormatException,
+      );
     });
   });
 }

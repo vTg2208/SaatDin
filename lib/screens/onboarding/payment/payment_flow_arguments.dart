@@ -1,4 +1,5 @@
 import '../../../models/plan_model.dart';
+import '../../../models/payment_order_model.dart';
 
 class PaymentFlowArguments {
   final InsurancePlan plan;
@@ -9,6 +10,7 @@ class PaymentFlowArguments {
   final String pincode;
   final String paymentMethod;
   final double loyaltyDiscountPercent;
+  final PaymentOrder? paymentOrder;
 
   const PaymentFlowArguments({
     required this.plan,
@@ -19,6 +21,7 @@ class PaymentFlowArguments {
     required this.pincode,
     this.paymentMethod = 'UPI AutoPay',
     this.loyaltyDiscountPercent = 0,
+    this.paymentOrder,
   });
 
   String get billingZone => pincode.isNotEmpty ? pincode : zone;
@@ -37,6 +40,7 @@ class PaymentFlowArguments {
     String? pincode,
     String? paymentMethod,
     double? loyaltyDiscountPercent,
+    PaymentOrder? paymentOrder,
   }) {
     return PaymentFlowArguments(
       plan: plan ?? this.plan,
@@ -48,6 +52,7 @@ class PaymentFlowArguments {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       loyaltyDiscountPercent:
           loyaltyDiscountPercent ?? this.loyaltyDiscountPercent,
+      paymentOrder: paymentOrder ?? this.paymentOrder,
     );
   }
 }
