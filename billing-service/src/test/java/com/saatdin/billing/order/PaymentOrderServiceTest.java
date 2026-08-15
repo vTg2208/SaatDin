@@ -27,6 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.saatdin.billing.provider.PaymentProvider;
 import com.saatdin.billing.provider.ProviderOrder;
+import com.saatdin.billing.payment.BillingMetrics;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentOrderServiceTest {
@@ -46,7 +49,7 @@ class PaymentOrderServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		service = new PaymentOrderService(repository, provider, CLOCK);
+		service = new PaymentOrderService(repository, provider, new BillingMetrics(new SimpleMeterRegistry()), CLOCK);
 		queryService = new PaymentOrderQueryService(repository, CLOCK);
 	}
 

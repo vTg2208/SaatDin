@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.saatdin.billing.provider.PaymentProvider;
 import com.saatdin.billing.provider.ProviderOrder;
+import com.saatdin.billing.payment.BillingMetrics;
 
 @Service
 public class PaymentOrderService {
@@ -19,11 +20,14 @@ public class PaymentOrderService {
 
 	private final PaymentOrderRepository repository;
 	private final PaymentProvider provider;
+	private final BillingMetrics metrics;
 	private final Clock clock;
 
-	public PaymentOrderService(PaymentOrderRepository repository, PaymentProvider provider, Clock clock) {
+	public PaymentOrderService(
+			PaymentOrderRepository repository, PaymentProvider provider, BillingMetrics metrics, Clock clock) {
 		this.repository = repository;
 		this.provider = provider;
+		this.metrics = metrics;
 		this.clock = clock;
 	}
 
@@ -53,7 +57,9 @@ public class PaymentOrderService {
 				now);
 		ProviderOrder providerOrder = provider.createOrder(order.id(), order.amount(), order.currency());
 		order.markPending(clock.instant(), providerOrder.providerOrderId());
-		return repository.save(order);
+		PaymentOrder saved = repository.save(order);
+		metrics.orderCreated();
+		return saved;
 	}
 
 	private PaymentOrder requireSameRequest(PaymentOrder existing, CreatePaymentOrderCommand command) {

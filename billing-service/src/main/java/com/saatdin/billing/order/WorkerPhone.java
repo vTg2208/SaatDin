@@ -1,11 +1,11 @@
 package com.saatdin.billing.order;
 
-final class WorkerPhone {
+public final class WorkerPhone {
 
 	private WorkerPhone() {
 	}
 
-	static String normalize(String raw) {
+	public static String normalize(String raw) {
 		if (raw == null) {
 			throw new IllegalArgumentException("worker phone is required");
 		}
