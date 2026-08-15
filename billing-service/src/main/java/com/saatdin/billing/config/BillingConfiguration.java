@@ -26,6 +26,9 @@ public class BillingConfiguration {
 
 	@PostConstruct
 	void validateEnvironment() {
+		if (properties.production() && properties.internalApiKey().length() < 32) {
+			throw new IllegalStateException("production billing internal API key must contain at least 32 characters");
+		}
 		if (properties.production() && "sandbox".equalsIgnoreCase(properties.provider())) {
 			throw new IllegalStateException("sandbox billing provider is forbidden in production");
 		}

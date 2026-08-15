@@ -63,13 +63,36 @@ class PolicyGetTests(unittest.TestCase):
         self.assertEqual(data["perTriggerPayout"], 400)
         self.assertEqual(data["maxDaysPerWeek"], 3)
 
+    def test_get_policy_uses_spring_coverage_when_billing_is_enabled(self) -> None:
+        client = _build_client()
+        token = create_access_token("9876543210")
+        billing = AsyncMock()
+        billing.has_active_coverage.side_effect = [True, False]
+        legacy_payments = AsyncMock(return_value=[{"week_start_date": date(2000, 1, 3)}])
+        with (
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
+            patch.dict("backend.app.core.config.settings.__dict__", {"billing_service_enabled": True}),
+            patch("backend.app.api.policy.get_billing_client", return_value=billing),
+            patch("backend.app.api.policy.total_settled_amount_for_phone", new=AsyncMock(return_value=0.0)),
+            patch("backend.app.api.policy.list_paid_premium_weeks_for_phone", new=legacy_payments),
+        ):
+            response = client.get(
+                "/api/v1/policy/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"], "active")
+        legacy_payments.assert_not_awaited()
+
 
 class PolicyPlanUpdateTests(unittest.TestCase):
     def test_update_plan_queues_change(self) -> None:
         client = _build_client()
         token = create_access_token("9876543210")
         with (
-            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=dict(_WORKER))),
             patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
             patch("backend.app.api.policy.set_pending_worker_plan", new=AsyncMock()),
             patch("backend.app.api.policy.total_settled_amount_for_phone", new=AsyncMock(return_value=0.0)),
@@ -124,13 +147,12 @@ class PremiumPaymentTests(unittest.TestCase):
         ]
 
         with (
-            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=_WORKER)),
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=dict(_WORKER))),
             patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
             patch.dict("backend.app.core.config.settings.__dict__", {"billing_service_enabled": True}),
             patch("backend.app.api.policy.get_billing_client", return_value=billing),
             patch("backend.app.api.policy.resolve_zone", return_value=("560103", {"zone_risk_multiplier": 1.0})),
             patch("backend.app.api.policy.build_plans", return_value=plans),
-            patch("backend.app.api.policy.list_paid_premium_weeks_for_phone", new=AsyncMock(return_value=[])),
         ):
             response = client.post(
                 "/api/v1/policy/payment-orders",
@@ -145,6 +167,50 @@ class PremiumPaymentTests(unittest.TestCase):
         self.assertEqual(request.amount, Decimal("60.00"))
         self.assertEqual(request.idempotency_key, "checkout-123")
         self.assertEqual(request.coverage_week_start.weekday(), 0)
+
+    def test_create_payment_order_uses_plan_effective_for_paid_week(self) -> None:
+        client = _build_client()
+        token = create_access_token("9876543210")
+        now = datetime.now(timezone.utc)
+        next_week = (now.date() - timedelta(days=now.weekday())) + timedelta(days=7)
+        worker = dict(_WORKER)
+        worker["pending_plan_name"] = "Premium"
+        worker["pending_plan_effective_at"] = datetime.combine(
+            next_week, datetime.min.time(), tzinfo=timezone.utc
+        ).isoformat()
+        billing = AsyncMock()
+        billing.create_payment_order.return_value = PaymentOrderView(
+            order_id=UUID("63c40536-b23a-4d52-8360-1a08454dcd10"),
+            status="PENDING",
+            provider="sandbox",
+            amount=Decimal("88.00"),
+            currency="INR",
+            coverage_week_start=next_week,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            checkout_data={"providerOrderId": "sandbox-order-2"},
+        )
+        plans = [
+            type("Plan", (), {"name": "Standard", "weeklyPremium": 60}),
+            type("Plan", (), {"name": "Premium", "weeklyPremium": 88}),
+        ]
+        with (
+            patch("backend.app.core.dependencies.get_worker", new=AsyncMock(return_value=worker)),
+            patch("backend.app.core.dependencies.apply_due_pending_worker_plan", new=AsyncMock(return_value=False)),
+            patch.dict("backend.app.core.config.settings.__dict__", {"billing_service_enabled": True}),
+            patch("backend.app.api.policy.get_billing_client", return_value=billing),
+            patch("backend.app.api.policy.resolve_zone", return_value=("560103", {"zone_risk_multiplier": 1.0})),
+            patch("backend.app.api.policy.build_plans", return_value=plans),
+        ):
+            response = client.post(
+                "/api/v1/policy/payment-orders",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"clientRequestId": "checkout-pending-plan"},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        request = billing.create_payment_order.await_args.args[0]
+        self.assertEqual(request.plan_code, "premium")
+        self.assertEqual(request.amount, Decimal("88.00"))
 
     def test_legacy_payment_route_is_gone_when_billing_is_enabled(self) -> None:
         client = _build_client()

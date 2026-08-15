@@ -158,6 +158,30 @@ def _apply_loyalty_discount(weekly_premium: int, loyalty_discount_percent: float
     return max(0, int(round(discounted)))
 
 
+async def _authoritative_payment_rows(phone: str) -> list[dict]:
+    if not settings.billing_service_enabled:
+        return await list_paid_premium_weeks_for_phone(phone)
+
+    client = get_billing_client()
+    today = datetime.now(timezone.utc).date()
+    current_week = _current_week_start_utc(today)
+    next_week = current_week + timedelta(days=7)
+    rows: list[dict] = []
+    if await client.has_active_coverage(phone, today):
+        rows.append({"week_start_date": current_week})
+    if await client.has_active_coverage(phone, next_week):
+        rows.append({"week_start_date": next_week})
+    return rows
+
+
+def _plan_name_for_coverage_week(worker: dict, coverage_week_start: date) -> str:
+    pending_name = str(worker.get("pending_plan_name") or "").strip()
+    pending_effective_at = _coerce_dt(worker.get("pending_plan_effective_at"))
+    if pending_name and pending_effective_at and pending_effective_at.date() <= coverage_week_start:
+        return pending_name
+    return str(worker.get("plan_name") or "")
+
+
 def _policy_cycle_context(worker: dict, now: datetime, paid_weeks: set[date]) -> tuple[str, date, date, date, int]:
     pending_effective_at = _coerce_dt(worker.get("pending_plan_effective_at"))
     current_cycle_start = _current_cycle_start_utc(now).date()
@@ -267,7 +291,7 @@ def _build_policy(worker: dict, settled_total: float, payment_rows: list[dict]) 
 @router.get("/me", response_model=ApiResponse)
 async def get_my_policy(worker: dict = Depends(get_current_worker)) -> ApiResponse:
     settled_total = await total_settled_amount_for_phone(str(worker["phone"]))
-    payment_rows = await list_paid_premium_weeks_for_phone(str(worker["phone"]))
+    payment_rows = await _authoritative_payment_rows(str(worker["phone"]))
     clean_streak_weeks = _clean_streak_weeks_from_paid_rows(payment_rows)
     loyalty_discount_percent = _loyalty_discount_percent(clean_streak_weeks)
     policy = _build_policy(worker, settled_total, payment_rows)
@@ -291,7 +315,7 @@ async def update_policy_plan(payload: PolicyUpdateRequest, worker: dict = Depend
     current_plan = str(worker["plan_name"]).strip().lower()
     if selected.name.strip().lower() == current_plan:
         settled_total = await total_settled_amount_for_phone(str(worker["phone"]))
-        payment_rows = await list_paid_premium_weeks_for_phone(str(worker["phone"]))
+        payment_rows = await _authoritative_payment_rows(str(worker["phone"]))
         clean_streak_weeks = _clean_streak_weeks_from_paid_rows(payment_rows)
         loyalty_discount_percent = _loyalty_discount_percent(clean_streak_weeks)
         policy = _build_policy(worker, settled_total, payment_rows)
@@ -307,7 +331,7 @@ async def update_policy_plan(payload: PolicyUpdateRequest, worker: dict = Depend
     worker["pending_plan_effective_at"] = next_week_effective_at.isoformat()
 
     settled_total = await total_settled_amount_for_phone(str(worker["phone"]))
-    payment_rows = await list_paid_premium_weeks_for_phone(str(worker["phone"]))
+    payment_rows = await _authoritative_payment_rows(str(worker["phone"]))
     clean_streak_weeks = _clean_streak_weeks_from_paid_rows(payment_rows)
     loyalty_discount_percent = _loyalty_discount_percent(clean_streak_weeks)
     policy = _build_policy(worker, settled_total, payment_rows)
@@ -411,17 +435,17 @@ async def create_payment_order(
     plans = build_plans(
         float(zone_data.get("zone_risk_multiplier", 1.0)), platform, zone_data=zone_data
     )
-    selected = next(
-        (plan for plan in plans if plan.name.lower() == str(worker["plan_name"]).strip().lower()),
-        None,
-    )
+    week_start = _next_week_start_utc(datetime.now(timezone.utc)).date()
+    plan_name = _plan_name_for_coverage_week(worker, week_start)
+    selected = next((plan for plan in plans if plan.name.lower() == plan_name.lower()), None)
     if selected is None:
         raise HTTPException(status_code=400, detail="Worker has an unknown plan")
 
-    payment_rows = await list_paid_premium_weeks_for_phone(str(worker["phone"]))
+    # Spring is the payment system of record. Until its ledger exposes a loyalty
+    # summary, never apply discounts from the retired FastAPI payment table.
+    payment_rows: list[dict] = []
     discount = _loyalty_discount_percent(_clean_streak_weeks_from_paid_rows(payment_rows))
     premium = _apply_loyalty_discount(selected.weeklyPremium, discount)
-    week_start = _next_week_start_utc(datetime.now(timezone.utc)).date()
     command = PaymentOrderCreate(
         worker_phone=str(worker["phone"]),
         plan_code=selected.name.strip().lower(),

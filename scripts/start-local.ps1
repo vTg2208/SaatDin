@@ -1,6 +1,7 @@
 param(
     [switch]$BackendOnly,
-    [switch]$FrontendOnly
+    [switch]$FrontendOnly,
+    [switch]$BillingOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,13 +12,18 @@ function Start-Backend {
     python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 }
 
+function Start-Billing {
+    Set-Location (Join-Path $repoRoot 'billing-service')
+    .\mvnw.cmd spring-boot:run
+}
+
 function Start-Frontend {
     Set-Location $repoRoot
     flutter run
 }
 
-if ($BackendOnly -and $FrontendOnly) {
-    throw 'Choose either -BackendOnly or -FrontendOnly, not both.'
+if (@($BackendOnly, $FrontendOnly, $BillingOnly).Where({ $_ }).Count -gt 1) {
+    throw 'Choose only one of -BackendOnly, -FrontendOnly, or -BillingOnly.'
 }
 
 if ($BackendOnly) {
@@ -29,6 +35,20 @@ if ($FrontendOnly) {
     Start-Frontend
     exit 0
 }
+
+if ($BillingOnly) {
+    Start-Billing
+    exit 0
+}
+
+Write-Host 'Starting billing service on http://127.0.0.1:8082 ...'
+$billingJob = Start-Job -ScriptBlock {
+    param($cwd)
+    Set-Location (Join-Path $cwd 'billing-service')
+    .\mvnw.cmd spring-boot:run
+} -ArgumentList $repoRoot
+
+Start-Sleep -Seconds 5
 
 Write-Host 'Starting SaatDin backend on http://127.0.0.1:8000 ...'
 $backendJob = Start-Job -ScriptBlock {
@@ -45,4 +65,6 @@ try {
 } finally {
     Stop-Job $backendJob -ErrorAction SilentlyContinue | Out-Null
     Remove-Job $backendJob -ErrorAction SilentlyContinue | Out-Null
+    Stop-Job $billingJob -ErrorAction SilentlyContinue | Out-Null
+    Remove-Job $billingJob -ErrorAction SilentlyContinue | Out-Null
 }

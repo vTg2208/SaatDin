@@ -7,6 +7,23 @@ on:
     branches: [ main ]
 
 jobs:
+  billing-tests:
+    name: Billing Tests (Java)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: billing-service/pom.xml
+
+      - name: Run billing tests
+        run: ./billing-service/mvnw -f billing-service/pom.xml test
+
   backend-tests:
     name: Backend Tests (Python)
     runs-on: ubuntu-latest

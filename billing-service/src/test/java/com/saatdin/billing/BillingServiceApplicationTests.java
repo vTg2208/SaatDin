@@ -1,9 +1,14 @@
 package com.saatdin.billing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Clock;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.saatdin.billing.order.PaymentOrderRepository;
@@ -21,6 +26,9 @@ import com.saatdin.billing.provider.PaymentProvider;
 				+ "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
 })
 class BillingServiceApplicationTests {
+
+	@Autowired
+	private ApplicationContext applicationContext;
 
 	@MockitoBean
 	private PaymentOrderRepository paymentOrderRepository;
@@ -48,6 +56,7 @@ class BillingServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
+		assertThat(applicationContext.getBeansOfType(UserDetailsService.class)).isEmpty();
 	}
 
 }

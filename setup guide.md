@@ -1,6 +1,6 @@
 ﻿# SaatDin Setup Guide
 
-This guide helps you run the implemented SaatDin project locally with both the Flutter app and the FastAPI backend.
+This guide runs the Flutter app, FastAPI application API, and Spring Boot billing service locally. FastAPI owns user, policy, claim, and payout workflows. Spring owns payment orders, verified transactions, and coverage periods; FastAPI is the only public facade used by Flutter.
 
 ## 1. Prerequisites
 
@@ -8,8 +8,10 @@ Install the following tools:
 - Flutter SDK (stable)
 - Dart SDK (comes with Flutter)
 - Python 3.11+
+- Java 17+
 - Android Studio or VS Code + Android SDK
 - Git
+- PostgreSQL 14+ (a single database is sufficient)
 
 Verify installation:
 
@@ -17,6 +19,7 @@ Verify installation:
 flutter --version
 dart --version
 python --version
+java --version
 ```
 
 ## 2. Project Structure (Important Paths)
@@ -26,6 +29,8 @@ python --version
 - Zone risk data: assets/data/zone_risk_runtime.json
 - Backend source: backend/app/main.py
 - Backend dependencies: backend/requirements.txt
+- Billing service: billing-service/
+- Billing migrations: billing-service/src/main/resources/db/migration/
 - Project story: PROJECT_INFO.md
 
 ## 3. Flutter App Setup
@@ -42,7 +47,36 @@ Run the app:
 flutter run
 ```
 
-## 4. Backend Setup (FastAPI)
+## 4. Database and Billing Service
+
+Both services may use the same PostgreSQL database, but ownership is separate. FastAPI uses the existing application tables. Spring Flyway exclusively owns the `billing` schema and creates it on startup. Do not let either service migrate the other service's tables.
+
+Prepare environment values from `billing-service/.env.example`. PowerShell does not automatically load `.env` files, so export the values in the shell or configure them in your IDE:
+
+```powershell
+$env:APP_ENVIRONMENT='development'
+$env:SPRING_PROFILES_ACTIVE='sandbox'
+$env:BILLING_DB_URL='jdbc:postgresql://localhost:5432/postgres'
+$env:BILLING_DB_USERNAME='postgres'
+$env:BILLING_DB_PASSWORD='<password>'
+$env:BILLING_INTERNAL_API_KEY='<same-32-character-key-used-by-fastapi>'
+$env:BILLING_PROVIDER='sandbox'
+$env:BILLING_SANDBOX_WEBHOOK_SECRET='<random-development-secret>'
+```
+
+Start Spring from the repository root:
+
+```powershell
+cd billing-service
+.\mvnw.cmd spring-boot:run
+cd ..
+```
+
+Verify it at `http://127.0.0.1:8082/actuator/health`.
+
+The sandbox profile exposes a development-only completion route. Production startup rejects the sandbox profile/provider, and this repository intentionally has no live payment adapter yet.
+
+## 5. Application API Setup (FastAPI)
 
 From project root, install backend dependencies:
 
@@ -60,14 +94,19 @@ Edit `backend/.env`; the database URL is required:
 
 ```env
 SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
+BILLING_SERVICE_ENABLED=true
+BILLING_SERVICE_URL=http://127.0.0.1:8082
+BILLING_SERVICE_API_KEY=<same-32-character-key-used-by-spring>
+BILLING_REQUEST_TIMEOUT_SECONDS=2
+BILLING_ALLOW_PRIVATE_HTTP=false
+ALLOW_CLIENT_REPORTED_PREMIUM_PAYMENTS=false
 FRAUD_SCORING_ENABLED=true
 FRAUD_MODEL_PATH=backend/models/fraud/fraud_iforest_latest.joblib
 FRAUD_ANOMALY_THRESHOLD=-0.05
 FRAUD_FAIL_OPEN=true
 ```
 
-The backend creates and verifies its PostgreSQL tables during startup. A blank
-`SUPABASE_DB_URL` is rejected.
+The backend creates and verifies its application tables during startup. A blank `SUPABASE_DB_URL` is rejected. Coverage checks fail closed when Spring is unavailable; claims and payouts never infer coverage from a client-reported payment.
 
 Optional: migrate legacy local SQLite data into Supabase once you need a hosted database:
 
@@ -92,12 +131,13 @@ Backend base URL expected by app:
 - Android emulator: `http://10.0.2.2:8000/api/v1`
 - Physical device: `http://<development-machine-LAN-IP>:8000/api/v1`
 
-## 5. Verify Backend Is Running
+## 6. Verify Services Are Running
 
 Health check:
 
 ```powershell
 curl http://127.0.0.1:8000/api/v1/health
+curl http://127.0.0.1:8082/actuator/health
 ```
 
 Expected response:
@@ -106,7 +146,7 @@ Expected response:
 {"status":"ok"}
 ```
 
-## 6. Current Implemented API Endpoints
+## 7. Current Implemented API Endpoints
 
 - GET /api/v1/health
 - POST /api/v1/auth/send-otp
@@ -122,6 +162,9 @@ Expected response:
 - POST /api/v1/workers/location-signal
 - GET /api/v1/policy
 - PUT /api/v1/policy/update
+- POST /api/v1/policy/payment-orders
+- GET /api/v1/policy/payment-orders/{order_id}
+- POST /api/v1/policy/payment-orders/{order_id}/sandbox-complete (development only)
 - GET /api/v1/claims
 - POST /api/v1/claims/submit
 - POST /api/v1/claims/{claim_id}/escalate
@@ -133,15 +176,24 @@ Expected response:
 - POST /api/v1/triggers/zonelock/report
 - GET /admin/dashboard
 
-## 7. Run App + Backend Together
+## 8. Run the Full Stack
 
-1. Terminal A (backend):
+Start order is PostgreSQL, Spring billing, FastAPI, then Flutter.
+
+1. Terminal A (billing):
+
+```powershell
+cd billing-service
+.\mvnw.cmd spring-boot:run
+```
+
+2. Terminal B (FastAPI):
 
 ```powershell
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
-2. Terminal B (flutter):
+3. Terminal C (Flutter):
 
 ```powershell
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
@@ -155,7 +207,9 @@ Optional one-command Windows helper:
 powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
 ```
 
-## 8. Troubleshooting
+The Flutter client creates an idempotent order through FastAPI and only displays success after Spring verifies the payment and reports `PAID`. The removed `/policy/premium-payment` client-write flow is not part of normal operation.
+
+## 9. Troubleshooting
 
 ### Android SDK location error
 If you see SDK location not found, set Android SDK path in android/local.properties:
@@ -178,6 +232,12 @@ python -m pip install -r backend/requirements.txt --upgrade
 - Pass the correct URL with `--dart-define=API_BASE_URL=...`
 - Use `10.0.2.2` for an Android emulator; use the development machine's LAN IP for a physical device
 
+### Coverage or checkout is unavailable
+- Check Spring health on port 8082 before FastAPI.
+- Confirm `BILLING_SERVICE_API_KEY` exactly matches `BILLING_INTERNAL_API_KEY`.
+- Confirm the PostgreSQL user can create and use the `billing` schema.
+- Expected behavior is fail-closed: an unreachable billing service does not grant coverage.
+
 ### Android release signing
 
 Create an upload keystore, copy `android/key.properties.example` to
@@ -185,24 +245,25 @@ Create an upload keystore, copy `android/key.properties.example` to
 and keystore must stay out of version control. Release builds are not signed when
 that file is absent.
 
-## 9. Useful Dev Commands
+## 10. Useful Dev Commands
 
 ```powershell
 flutter analyze
 flutter test
 python -m compileall backend/app/main.py
+cd billing-service; .\mvnw.cmd test; cd ..
 python backend/scripts/train_isolation_forest.py --output-dir backend/models/fraud --version v1
 ```
 
-## 10. Notes
+## 11. Notes
 
 - Zone and risk data are currently loaded from assets/data/zone_risk_runtime.json.
 - Dynamic onboarding, claims, escalations, payouts, admin review, and mobile signal ingestion are integrated.
 - The live backend is Supabase/Postgres-backed; SQLite migration remains a legacy path only.
 - S3-compatible archival and BigQuery mirroring are planned; no archival job is implemented yet.
-- OTP delivery, premium collection, UPI verification, and payouts are development simulations. Production mode intentionally refuses unsafe defaults; provider callbacks must be implemented before launch.
+- OTP delivery, premium collection, UPI verification, and payouts are development simulations. Billing accepts payment state changes only from signed provider webhooks; the sandbox generates those signatures locally. Production mode intentionally refuses unsafe defaults, and live provider adapters must be implemented before launch.
 
-## 11. Co-Claim Cluster Risk Scoring (Ops)
+## 12. Co-Claim Cluster Risk Scoring (Ops)
 
 SaatDin includes a scheduled co-claim graph pipeline for coordinated-timing fraud analysis.
 
@@ -232,7 +293,7 @@ Risk levels:
 - `GET /api/v1/fraud/clusters/{cluster_id}` — cluster members, edges, and metadata
 - `POST /api/v1/fraud/clusters/run` — manual generation trigger
 
-## 12. Cell-Tower Cross-Check Signal (GPS Anti-Spoofing)
+## 13. Cell-Tower Cross-Check Signal (GPS Anti-Spoofing)
 
 SaatDin accepts app-observable tower metadata and evaluates it against the worker's claimed zone.
 
@@ -262,7 +323,7 @@ SaatDin accepts app-observable tower metadata and evaluates it against the worke
 - Missing/stale/insufficient tower data stays neutral (no score adjustment).
 - Tower signal is advisory only and does **not** auto-deny claims on its own.
 
-## 13. Motion Signal Features (Static-Spoof Separation)
+## 14. Motion Signal Features (Static-Spoof Separation)
 
 SaatDin supports privacy-safe motion aggregates to distinguish genuine movement from static spoof behavior.
 
