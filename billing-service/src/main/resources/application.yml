@@ -1,0 +1,31 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: billing-service
+  datasource:
+    url: ${BILLING_DB_URL:}
+    username: ${BILLING_DB_USERNAME:}
+    password: ${BILLING_DB_PASSWORD:}
+  flyway:
+    enabled: true
+    schemas: billing
+    default-schema: billing
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: billing
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
