@@ -12,6 +12,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.saatdin.billing.order.PaymentOrderStatus;
+import com.saatdin.billing.order.PaymentOrder;
 import com.saatdin.billing.provider.InvalidWebhookSignatureException;
 import com.saatdin.billing.provider.PaymentProvider;
 import com.saatdin.billing.provider.ProviderOrder;
@@ -74,6 +75,26 @@ public final class SandboxPaymentProvider implements PaymentProvider {
 		}
 	}
 
+	public SandboxWebhook createPaidWebhook(PaymentOrder order, Instant occurredAt) {
+		Objects.requireNonNull(order, "payment order is required");
+		try {
+			byte[] body = jsonMapper.writeValueAsBytes(new SandboxWebhookPayload(
+					"sandbox-event-" + order.id(),
+					"sandbox-payment-" + order.id(),
+					order.id(),
+					PaymentOrderStatus.PAID.name(),
+					order.amount(),
+					order.currency(),
+					occurredAt.toString()));
+			Mac mac = Mac.getInstance(HMAC_SHA_256);
+			mac.init(new SecretKeySpec(webhookSecret, HMAC_SHA_256));
+			return new SandboxWebhook(HexFormat.of().formatHex(mac.doFinal(body)), body);
+		}
+		catch (Exception exception) {
+			throw new IllegalStateException("could not create sandbox payment event", exception);
+		}
+	}
+
 	private boolean signatureMatches(String signature, byte[] body) {
 		try {
 			byte[] supplied = HexFormat.of().parseHex(Objects.requireNonNullElse(signature, ""));
@@ -94,5 +115,16 @@ public final class SandboxPaymentProvider implements PaymentProvider {
 			java.math.BigDecimal amount,
 			String currency,
 			String occurredAt) {
+	}
+
+	public record SandboxWebhook(String signature, byte[] body) {
+		public SandboxWebhook {
+			body = body.clone();
+		}
+
+		@Override
+		public byte[] body() {
+			return body.clone();
+		}
 	}
 }

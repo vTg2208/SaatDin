@@ -1,6 +1,13 @@
 server:
   port: 8082
 
+billing:
+  internal-api-key: ${BILLING_INTERNAL_API_KEY:development-internal-key}
+  provider: ${BILLING_PROVIDER:sandbox}
+  sandbox-webhook-secret: ${BILLING_SANDBOX_WEBHOOK_SECRET:development-sandbox-secret}
+  coverage-max-batch-size: ${BILLING_COVERAGE_MAX_BATCH_SIZE:100}
+  app-environment: ${APP_ENVIRONMENT:development}
+
 spring:
   application:
     name: billing-service
